@@ -74,7 +74,7 @@ public class HxcppIntellijBackend implements DapBackend {
     return listener.getLocalPort();
   }
 
-  /** The debuggee's environment: its embedded server reads this backend's host and port from it and connects out during startup. */
+  /** Adds this backend's host and port to the debuggee's environment; its embedded server reads them and connects out during startup. */
   @NotNull
   public GeneralCommandLine withDebuggeeEnvironment(@NotNull GeneralCommandLine commandLine) {
     return commandLine

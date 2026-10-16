@@ -67,7 +67,7 @@ public final class JsDebugSessions {
    * Starts js-debug on the node executable, runs the parent handshake for
    * the lane's configuration and wires the first child (page or process) into
    * a mux - the sequence the browser and node backends share. The adapter is
-   * torn down again when the handshake fails.
+   * torn down again when any step fails.
    */
   public static Session open(Path nodeExecutable, Path dapServerJs, String adapterId, Map<String, Object> parentConfig) throws IOException {
     AdapterProcess adapter = JsAdapterLauncher.launchJsDebug(nodeExecutable, dapServerJs);

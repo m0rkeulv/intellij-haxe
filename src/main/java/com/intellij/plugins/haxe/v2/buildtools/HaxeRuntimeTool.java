@@ -20,10 +20,10 @@ import java.util.function.Function;
 
 /**
  * The runtimes a project needs beside the compiler and where each one is
- * looked up: the Build Tools override, the SDK's configured path, the
- * runtime's own environment variables, the PATH. Run time, SDK creation and
- * both settings panels (whose grey defaults show what an empty field
- * inherits) walk this one table.
+ * looked up, in this order: the Build Tools override, the SDK's configured
+ * path, the runtime's own environment variables, the PATH. Launches, SDK
+ * creation and both settings panels (whose grayed defaults show what an
+ * empty field inherits) all resolve through this one table.
  */
 public enum HaxeRuntimeTool {
   HAXELIB("haxelib", HaxeSdkAdditionalDataBase::getHaxelibPath, HaxeBuildToolSettings::getHaxelibPath, List.of()) {
@@ -36,7 +36,7 @@ public enum HaxeRuntimeTool {
       return HaxeSdkUtilBase.getHaxelibPathByFolderPath(sdk.getHomePath());
     }
   },
-  // Neko's install folder, then its own search path (on Homebrew NEKOPATH names <prefix>/lib/neko, a folder without the executable)
+  // Neko's install folder, then its own search path (on Homebrew NEKOPATH names <prefix>/lib/neko, which holds no executable and is skipped)
   NEKO("neko", HaxeSdkAdditionalDataBase::getNekoBinPath, HaxeBuildToolSettings::getNekoPath,
        List.of(HaxeEnvironmentVariables.NEKO_INSTPATH, HaxeEnvironmentVariables.NEKOPATH)),
   // the variable names are class-qualified: the bare HASHLINK would name this constant
@@ -142,7 +142,7 @@ public enum HaxeRuntimeTool {
     return inheritedDefault(sdkExecutable, environment);
   }
 
-  /** A configured value may point at the executable itself or its directory; null when neither exists or the value is malformed. */
+  /** The executable a configured value names, as the file itself or inside it as a directory; null when neither exists or the value is malformed. */
   @Nullable
   public String executableOrInDirectory(@Nullable String configuredPath) {
     if (configuredPath == null || configuredPath.isBlank()) return null;

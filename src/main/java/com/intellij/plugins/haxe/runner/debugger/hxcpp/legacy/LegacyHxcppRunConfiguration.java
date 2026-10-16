@@ -65,7 +65,7 @@ public class LegacyHxcppRunConfiguration extends DapExecutableRunConfigurationBa
     return new LegacyHxcppRunConfigurationEditor(getProject());
   }
 
-  /** The executable checks of the base plus the port; remote mode only listens, so it needs no executable. */
+  /** The port, then the base's executable checks; remote mode only listens, so there a blank executable passes as long as a module is set. */
   @Override
   public void checkConfiguration() throws RuntimeConfigurationException {
     if (port < 1 || port > 65535) {

@@ -42,11 +42,10 @@ import static com.intellij.plugins.haxe.config.HaxeTarget.FLAG_DEFINE_VALUE;
  * build ({@link HaxeResolveContexts}), so each build's libraries must be
  * attached, whichever file is active. The define context stays per build -
  * it counts only the libraries a file's build declares. Classpaths come from
- * `haxelib path`, run from the declaring build's work directory (so a
- * build-local {@code .haxelib} repository counts), which includes transitive
- * dependencies. Managed entries
- * carry a name prefix so the sync can remove stale ones without touching
- * user-defined libraries.
+ * `haxelib path`, which includes transitive dependencies; it runs from the
+ * declaring build's work directory, so a build-local {@code .haxelib}
+ * repository counts. Managed entries carry a name prefix so the sync can
+ * remove stale ones without touching user-defined libraries.
  */
 // TODO: a file resolves against the libraries of every build of its module; a per-context library scope would limit it to its own build's
 @CustomLog

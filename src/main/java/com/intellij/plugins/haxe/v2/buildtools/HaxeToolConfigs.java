@@ -31,9 +31,9 @@ public final class HaxeToolConfigs {
    * project base directory (inclusive), or null when none holds one — the same
    * upward discovery the tools perform per source file. The IDE formatter's own
    * lookup ({@code HxformatConfigs.findConfig}) differs on purpose: it keeps
-   * walking above the project for library sources and falls back to the chosen
-   * override config, which the tools cannot read (they take the config beside
-   * their working directory).
+   * walking above the project for library sources and falls back to the
+   * fallback config the user chose, which the tools cannot read (they take the
+   * config beside their working directory).
    */
   @Nullable
   public static VirtualFile findConfigDirectory(@NotNull Project project, @NotNull VirtualFile file, @NotNull String configName) {

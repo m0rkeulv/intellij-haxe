@@ -52,7 +52,7 @@ import static com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypes.PACKAGE_STATEM
 public class HaxeFile extends PsiFileBase
   implements HaxeModifierListOwner, PsiClassOwner {
 
-  /** The file whose imports apply to every module in its folder; its package follows its path, so it needs no package statement. */
+  /** The file whose imports apply to every module in its folder and below; its package follows its path, so it needs no package statement. */
   public static final String IMPORT_HX_NAME = "import.hx";
 
   private HaxeFileModel haxeFileModel;

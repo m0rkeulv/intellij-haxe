@@ -84,8 +84,9 @@ public final class HaxeCompilerNavigationService {
   /**
    * {@link #definition} for a caller that holds the read lock and so must
    * not block on the network: the request runs on a pooled thread while the
-   * caller waits cancelably for at most {@link HaxeCancelableFutures#ANSWER_TIMEOUT_MS}. Empty
-   * when the server gives none or the wait runs out.
+   * caller waits cancelably for at most
+   * {@link HaxeCancelableFutures#ANSWER_TIMEOUT_MS}. Empty when the server
+   * gives none or the wait runs out.
    */
   @NotNull
   public List<Location> definitionUnderReadLock(@NotNull VirtualFile file, int offset) {

@@ -55,7 +55,7 @@ public abstract class HaxeSharedBypassCollector implements SharedBypassCollector
     if (className != null) {
       builder.text(className, navigationTo(type));
     }
-    // a Dynamic keeps its unresolved type parameters to itself
+    // a Dynamic with unknown or unresolved type parameters shows without them
     if (type.isDynamic() && type.containsUnknownOrUnresolvedTypeParameters()) return;
     ResultHolder[] specifics = classReference.getSpecifics();
     if (specifics.length == 0) return;

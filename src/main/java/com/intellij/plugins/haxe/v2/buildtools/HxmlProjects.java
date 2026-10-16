@@ -82,10 +82,11 @@ public final class HxmlProjects {
 
   /**
    * The command with its file argument replaced by the SELECTED section's
-   * lines as compiler arguments whatever the section count (a single-section
-   * file inlines its whole content), the lines passed through
-   * {@code transform} first. Null when the command carries no file argument or
-   * the section cannot be read. Call in a read action.
+   * lines, parsed as compiler arguments and passed through {@code transform}.
+   * Unlike {@link #scopeToSelectedSection} it splices whatever the section
+   * count: a single-section file inlines its whole content. Null when the
+   * command carries no file argument or the section cannot be read. Call in a
+   * read action.
    */
   @Nullable
   public static List<String> spliceSelectedSection(@NotNull Project project,

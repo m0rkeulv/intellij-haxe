@@ -12,9 +12,9 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Creates a member (a field or an enum value) for an unresolved reference:
- * the target class or module and the insert point among its members are
- * shared; the subclass picks where among the existing members the new one goes.
+ * Creates a member (a field or an enum value) for an unresolved reference.
+ * The base finds the target class or module and its existing members; the
+ * subclass picks where among them the new one goes.
  */
 abstract class HaxeIntroduceMemberIntentionBase extends HaxeUnresolvedSymbolIntentionBase<HaxeReferenceExpression> {
 

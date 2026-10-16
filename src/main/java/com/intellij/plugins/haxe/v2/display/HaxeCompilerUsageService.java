@@ -112,7 +112,7 @@ public final class HaxeCompilerUsageService {
     return UsageState.UNKNOWN;
   }
 
-  /** How the compiler searches a declaration's references: an overriding method can be reached through a base-typed call. */
+  /** How the compiler searches a declaration's references: a method's search includes its base and overriding declarations, since an override can be reached through a base-typed call; anything else is searched directly. */
   @NotNull
   public static FindReferencesKind referenceKindOf(@Nullable HaxeNamedComponent declaration) {
     return declaration instanceof HaxeMethod ? FindReferencesKind.WITH_BASE_AND_DESCENDANTS : FindReferencesKind.DIRECT;

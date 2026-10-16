@@ -57,7 +57,7 @@ public record LimeProjectShape(boolean projectRoot, boolean haxelib, boolean ope
     return isLimeFamily() && !openflLib;
   }
 
-  /** Collects a shape element by element; a byte scanner feeds it from its callbacks. */
+  /** Collects a shape element by element; {@link #of} feeds it from the PSI, the project.xml parser from its stream. */
   public static final class Builder {
     private boolean projectRoot;
     private boolean haxelib;

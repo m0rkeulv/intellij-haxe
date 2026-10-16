@@ -159,7 +159,7 @@ public final class HaxeBuildFileScanner {
     return shapeOf(file).projectRoot() ? HaxeBuildFileType.NMML : null;
   }
 
-  /** Under the Lime extensions a {@code <project>} with a library or a source path is Lime's, OpenFL's when that library is openfl; anything else (a maven pom) is nobody's. */
+  /** Under the Lime extensions: a {@code <project>} declaring a library or a source path is a Lime project, an OpenFL one when a declared library is openfl; anything else (a maven pom) is no build file. */
   @Nullable
   private static HaxeBuildFileType limeFamilyType(@NotNull VirtualFile file) {
     LimeProjectShape shape = shapeOf(file);

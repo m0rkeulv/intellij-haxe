@@ -14,7 +14,7 @@ import static com.intellij.plugins.haxe.ide.completion.HaxeCommonCompletionPatte
 import static com.intellij.plugins.haxe.ide.completion.HaxeCompletionUtil.isInReferenceChain;
 import static com.intellij.plugins.haxe.ide.lookup.HaxeMemberLookupElement.createSynteticMember;
 
-/** Completes the identifiers the compiler accepts without a declaration: `trace` and the untyped target-syntax calls. */
+/** Completes the identifiers the compiler accepts without a declaration: {@code trace} and the untyped target-syntax calls. */
 public class HaxeSyntheticMemberCompletionContributor extends CompletionContributor {
 
   private static final PsiElementPattern.Capture<PsiElement> ELEMENT_CAPTURE = psiElement()

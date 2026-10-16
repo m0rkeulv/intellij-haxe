@@ -57,7 +57,7 @@ public class HaxeIntroduceFieldIntention extends HaxeIntroduceMemberIntentionBas
     return element.getContainingFile();
   }
 
-  /** Imports the types the guessed field type names that the generated declaration cannot resolve. */
+  /** Adds imports for the types in the guessed field type that the generated declaration cannot resolve. */
   private void addImportsFor(@NotNull HaxeFieldDeclaration variableDeclaration, @NotNull PsiFile containingFile) {
     HaxeTypeTag typeTag = variableDeclaration.getTypeTag();
     if (typeTag == null) return;

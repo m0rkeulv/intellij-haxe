@@ -17,8 +17,8 @@ import org.jetbrains.annotations.TestOnly;
  * Balloons of the compiler services - the one home of the {@code haxe.compiler}
  * notification group registered in plugin.xml. The "compiler unavailable"
  * notice shows once per project: a cause that stops completion stops
- * navigation too, so the two features share the one notice and the first to
- * notice reports it.
+ * navigation too, so the two features share one notice, shown by whichever
+ * runs into the cause first.
  */
 @Service(Service.Level.PROJECT)
 public final class HaxeCompilerNotifications {

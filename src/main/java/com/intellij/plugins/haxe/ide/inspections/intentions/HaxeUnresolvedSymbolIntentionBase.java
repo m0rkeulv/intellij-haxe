@@ -215,11 +215,12 @@ public abstract class HaxeUnresolvedSymbolIntentionBase<T extends PsiElement> ex
   }
 
   /**
-   * {@code name:Type, ...} for the arguments: each argument's evaluated type
-   * (left out when unknown) and a name the suggester derives from it, avoiding
-   * the names already taken and, for a declaration that joins the call's scope
-   * (a local function), the names visible at the call; {@code pN} as the
-   * fallback.
+   * The parameter list for the arguments ({@code name:Type,...}). An argument
+   * of known type gets that type and a name the suggester derives from the
+   * argument, unique among the earlier parameters and, for a declaration that
+   * joins the call's scope (a local function), among the names visible at the
+   * call. {@code pN} is the fallback name; an argument of unknown type gets it
+   * without a type.
    */
   protected String parameterListFromArguments(@NotNull List<HaxeExpression> arguments, boolean avoidNamesVisibleAtCall) {
     StringBuilder builder = new StringBuilder();
