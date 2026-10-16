@@ -1,9 +1,6 @@
 package com.intellij.plugins.haxe.profiler.bridge;
 
 import com.intellij.execution.Executor;
-import java.util.Map;
-import java.util.LinkedHashMap;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeSystemPaths;
 import com.intellij.execution.executors.RunExecutorSettings;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.SystemInfo;
@@ -14,6 +11,7 @@ import com.intellij.plugins.haxe.profiler.bridge.hashlink.HaxeHlProfilerConfigur
 import com.intellij.plugins.haxe.profiler.bridge.hxcpp.HaxeHxcppProfilerConfigurationState;
 import com.intellij.plugins.haxe.profiler.bridge.js.HaxeJsProfilerConfigurationState;
 import com.intellij.plugins.haxe.profiler.bridge.tracy.HaxeHxcppTracyProfilerConfigurationState;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeSystemPaths;
 import com.intellij.profiler.DefaultProfilerExecutorGroup;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -22,7 +20,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**

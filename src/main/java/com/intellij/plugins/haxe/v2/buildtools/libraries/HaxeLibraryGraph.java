@@ -1,8 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
 import com.intellij.openapi.components.Service;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

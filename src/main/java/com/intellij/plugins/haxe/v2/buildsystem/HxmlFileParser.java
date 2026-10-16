@@ -1,8 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
+import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
-import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;

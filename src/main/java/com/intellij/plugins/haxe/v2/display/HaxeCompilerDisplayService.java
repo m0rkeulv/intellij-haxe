@@ -1,9 +1,10 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
+import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeDisplayConnectionMode;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
@@ -31,7 +32,6 @@ import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContext;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
-import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiModificationTracker;

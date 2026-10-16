@@ -1,8 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.hxcpp.intellij;
 
-import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
-import org.jetbrains.annotations.NotNull;
 import com.intellij.execution.configurations.GeneralCommandLine;
+import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapSourceResolver;
@@ -11,7 +10,9 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeDebugAdditions;
 import com.intellij.openapi.project.Project;
 import com.intellij.xdebugger.XSourcePosition;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;

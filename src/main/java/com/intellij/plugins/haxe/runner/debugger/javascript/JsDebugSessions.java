@@ -1,10 +1,10 @@
 package com.intellij.plugins.haxe.runner.debugger.javascript;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
-import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;

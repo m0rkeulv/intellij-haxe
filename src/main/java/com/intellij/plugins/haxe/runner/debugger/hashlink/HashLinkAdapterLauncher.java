@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.runner.debugger.hashlink;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.plugins.haxe.util.HaxePluginPaths;
+
 import java.io.IOException;
 import java.nio.file.Path;
 

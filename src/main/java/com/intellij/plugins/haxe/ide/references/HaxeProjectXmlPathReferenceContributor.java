@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.ide.references;
 
-import com.intellij.patterns.XmlPatterns;
 import com.intellij.patterns.ElementPattern;
+import com.intellij.patterns.XmlPatterns;
 import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeProjectXmlFiles;
 import com.intellij.psi.PsiElement;

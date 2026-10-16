@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.application.options.CodeStyle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
@@ -20,6 +19,7 @@ import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.plugins.haxe.ide.formatter.settings.HaxeCodeStyleSettings;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
 import com.intellij.psi.codeStyle.CodeStyleSettingsManager;
 import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;

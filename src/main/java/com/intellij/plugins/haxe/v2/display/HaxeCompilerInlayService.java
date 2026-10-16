@@ -1,9 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.openapi.Disposable;
-import java.nio.file.Path;
-import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
-import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
@@ -25,6 +22,8 @@ import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalFunctionDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeParameter;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.Connected;
@@ -39,6 +38,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

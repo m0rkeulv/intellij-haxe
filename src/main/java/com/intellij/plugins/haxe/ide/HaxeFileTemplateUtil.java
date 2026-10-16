@@ -18,7 +18,6 @@
 package com.intellij.plugins.haxe.ide;
 
 import com.intellij.ide.fileTemplates.FileTemplate;
-import com.intellij.util.TriConsumer;
 import com.intellij.ide.fileTemplates.FileTemplateManager;
 import com.intellij.ide.fileTemplates.FileTemplateUtil;
 import com.intellij.openapi.project.Project;
@@ -28,6 +27,7 @@ import com.intellij.plugins.haxe.buildsystem.nmml.NMMLFileType;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiElement;
 import com.intellij.util.SmartList;
+import com.intellij.util.TriConsumer;
 import com.intellij.util.containers.ContainerUtil;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;

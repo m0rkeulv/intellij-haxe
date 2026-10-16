@@ -1,10 +1,10 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.io.OSAgnosticPathUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import org.jetbrains.annotations.NotNull;

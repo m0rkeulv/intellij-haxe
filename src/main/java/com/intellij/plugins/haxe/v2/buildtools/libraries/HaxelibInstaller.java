@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;
@@ -9,6 +8,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.ide.annotator.semantics;
 
 import com.intellij.codeInsight.intention.IntentionAction;
-import java.util.HashMap;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -21,6 +20,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 

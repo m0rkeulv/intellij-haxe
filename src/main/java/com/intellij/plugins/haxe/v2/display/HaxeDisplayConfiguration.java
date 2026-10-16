@@ -1,10 +1,10 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineOverride;
 import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeIdeOverrides;

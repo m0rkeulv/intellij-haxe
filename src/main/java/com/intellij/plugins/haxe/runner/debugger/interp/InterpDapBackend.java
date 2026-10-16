@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.interp;
 
 import com.intellij.openapi.project.Project;
-import java.util.List;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.DapConnection;
 import com.intellij.plugins.haxe.runner.debugger.eval.EvalDebugAdapter;
@@ -10,6 +9,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

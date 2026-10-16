@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.execution.DefaultExecutionResult;
-import com.intellij.util.net.NetUtils;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionResult;
 import com.intellij.execution.Executor;
@@ -20,6 +19,7 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.profiler.HaxeJsProfilerCapture;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.MostlySilentColoredProcessHandler;
+import com.intellij.util.net.NetUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

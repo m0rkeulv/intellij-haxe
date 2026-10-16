@@ -1,24 +1,25 @@
 package com.intellij.plugins.haxe.lang.psi.fakes;
 
 import com.intellij.openapi.project.Project;
-import java.util.Set;
-import java.util.List;
-import java.util.HashSet;
-import com.intellij.util.containers.ContainerUtil;
-import com.intellij.plugins.haxe.model.HaxeMethodModel;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.ModificationTracker;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethod;
 import com.intellij.plugins.haxe.lang.psi.HaxeModule;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
+import com.intellij.plugins.haxe.model.HaxeMethodModel;
 import com.intellij.plugins.haxe.model.HaxeModuleModel;
 import com.intellij.plugins.haxe.util.HaxeElementGenerator;
 import com.intellij.psi.util.CachedValue;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
+import com.intellij.util.containers.ContainerUtil;
 import org.intellij.lang.annotations.Language;
 import org.jspecify.annotations.Nullable;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class HaxeSyntheticDeclarations {
     @Language("haxe")

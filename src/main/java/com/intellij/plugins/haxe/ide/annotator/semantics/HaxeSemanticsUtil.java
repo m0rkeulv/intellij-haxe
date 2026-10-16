@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.ide.annotator.semantics;
 
-import com.intellij.plugins.haxe.util.HaxePresentableUtil;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.ide.annotator.HaxeProblemReporter;
@@ -15,6 +14,7 @@ import com.intellij.plugins.haxe.model.fixer.HaxeRemoveElementFixer;
 import com.intellij.plugins.haxe.model.fixer.HaxeTypeTagChangeFixer;
 import com.intellij.plugins.haxe.model.type.*;
 import com.intellij.plugins.haxe.util.HaxeAbstractEnumUtil;
+import com.intellij.plugins.haxe.util.HaxePresentableUtil;
 import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 

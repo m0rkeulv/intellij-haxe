@@ -1,13 +1,13 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolFlagSpellings;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolFlagSpellings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.testing.*;
 import com.intellij.util.execution.ParametersListUtil;

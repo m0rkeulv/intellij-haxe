@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.runner.nodejs;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
-import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.AdapterTargetsSmartStepHandler;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
@@ -9,6 +8,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.ConfiguredLaunchRequest;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;
 import java.io.BufferedReader;
 import java.io.File;

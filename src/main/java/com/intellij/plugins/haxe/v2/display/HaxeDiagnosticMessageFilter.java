@@ -1,12 +1,12 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.plugins.haxe.display.protocol.Diagnostic;
-import java.util.HashMap;
-import com.intellij.plugins.haxe.ide.annotator.semantics.HaxeSyntaxMigrationFixes;
 import com.intellij.plugins.haxe.display.protocol.DiagnosticKind;
 import com.intellij.plugins.haxe.display.protocol.DiagnosticSeverity;
 import com.intellij.plugins.haxe.display.protocol.InitializeResult;
+import com.intellij.plugins.haxe.ide.annotator.semantics.HaxeSyntaxMigrationFixes;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import java.util.HashMap;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

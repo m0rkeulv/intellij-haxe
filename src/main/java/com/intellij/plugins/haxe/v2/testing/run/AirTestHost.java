@@ -1,8 +1,8 @@
 package com.intellij.plugins.haxe.v2.testing.run;
 
 import com.intellij.execution.ExecutionException;
-import com.intellij.plugins.haxe.runner.debugger.flash.AdlLaunches;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.runner.debugger.flash.AdlLaunches;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeSystemPaths;
 import org.jetbrains.annotations.NotNull;
 

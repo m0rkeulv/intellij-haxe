@@ -1,8 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
-import com.intellij.plugins.haxe.buildsystem.lime.LimeProjectShape;
 import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
+import com.intellij.plugins.haxe.buildsystem.lime.LimeProjectShape;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.openapi.util.text.StringUtil;
 import lombok.CustomLog;
