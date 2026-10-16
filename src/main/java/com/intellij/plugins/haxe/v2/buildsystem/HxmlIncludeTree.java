@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -85,7 +84,7 @@ public record HxmlIncludeTree(@NotNull VirtualFile file, @NotNull HaxeBuildFileI
     Map<String, HaxeLibDependency> byName = new LinkedHashMap<>();
     for (HxmlIncludeTree entry : files()) {
       for (HaxeLibDependency library : entry.own().libraries()) {
-        byName.putIfAbsent(library.name().toLowerCase(Locale.ROOT), library);
+        byName.putIfAbsent(library.key(), library);
       }
     }
     return List.copyOf(byName.values());

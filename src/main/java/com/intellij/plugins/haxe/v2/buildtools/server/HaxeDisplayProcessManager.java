@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.server;
 
 import com.intellij.execution.ExecutionException;
-import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -9,21 +8,15 @@ import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.FramedDisplayChannel;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolEnvironment;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
-import com.intellij.util.execution.ParametersListUtil;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.List;
 
 /// Runs one dedicated haxe display process per SDK in `--server-connect`
@@ -89,10 +82,7 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
    */
   @Nullable
   public synchronized Channel channelFor(@Nullable String sdkName) {
-    HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
-    if (!settings.isCompilationServerEnabled()) return null;
-    // every request runs project macros, so an untrusted project gets no process
-    if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) return null;
+    if (!mayStart()) return null;
     String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
     DisplayProcess process = processes.get(idFor(executablePath));
     if (process == null) {
@@ -115,11 +105,10 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
 
   @Override
   protected int startLocked(@NotNull DisplayProcess process) {
-    HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
     try (ServerSocket listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
       listener.setSoTimeout(ACCEPT_TIMEOUT_MS);
       int port = listener.getLocalPort();
-      startProcess(process, commandLine(process, settings, port));
+      startProcess(process, serverCommandLine(process, "--server-connect", HaxeCompilationServerManager.SERVER_HOST + ":" + port));
       Socket connection = listener.accept();
       process.channel = new FramedDisplayChannel(connection);
       process.port = port;
@@ -133,23 +122,6 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
       stopProcessLocked(process);
       return -1;
     }
-  }
-
-  @NotNull
-  private GeneralCommandLine commandLine(@NotNull DisplayProcess process, @NotNull HaxeBuildToolSettings settings, int port) {
-    List<String> command = new ArrayList<>();
-    command.add(process.executablePath);
-    command.addAll(ParametersListUtil.parse(settings.getCompilationServerArguments()));
-    command.add("--server-connect");
-    command.add(HaxeCompilationServerManager.SERVER_HOST + ":" + port);
-
-    GeneralCommandLine commandLine = new GeneralCommandLine(command);
-    // every request carries its own --cwd; a missing project directory must not fail the start
-    String basePath = project.getBasePath();
-    if (basePath != null && new File(basePath).isDirectory()) {
-      commandLine.withWorkDirectory(basePath);
-    }
-    return HaxeToolEnvironment.withSdkOnPath(commandLine, HaxeToolPathResolver.findSdk(project, process.sdkName));
   }
 
   @Override

@@ -28,7 +28,6 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.tree.DefaultMutableTreeNode;
 import java.util.List;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import java.util.Objects;
@@ -251,7 +250,7 @@ final class HaxeToolWindowTreeBuilder {
                                                         @NotNull Set<String> ancestry) {
     DefaultMutableTreeNode node = new DefaultMutableTreeNode(row);
     HaxeLibraryGraph.Library library = graph.library(row.name());
-    String key = row.name().toLowerCase(Locale.ROOT);
+    String key = HaxeLibDependency.key(row.name());
     if (library == null || !ancestry.add(key)) return node;
     for (HaxeLibraryGraph.Requirement requirement : library.requires()) {
       HaxeLibDependency dependency = new HaxeLibDependency(requirement.name(), requirement.version());

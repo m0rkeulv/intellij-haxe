@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.execution.ExecutionException;
+import com.intellij.util.net.NetUtils;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.configurations.RunProfile;
@@ -18,7 +19,6 @@ import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XDebuggerManager;
 import com.intellij.xdebugger.XSessionStartedResult;
 import java.io.IOException;
-import java.net.ServerSocket;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -53,10 +53,10 @@ public abstract class DapDebugRunnerBase<C extends RunConfiguration, B extends D
 
   /** A loopback port free right now, for a debuggee or adapter that binds it next. */
   protected static int findFreePort() throws ExecutionException {
-    // unavoidable race between closing here and the debuggee binding it; in
+    // unavoidable race between probing here and the debuggee binding it; in
     // practice it binds immediately at startup and a collision just fails the session
-    try (ServerSocket socket = new ServerSocket(0)) {
-      return socket.getLocalPort();
+    try {
+      return NetUtils.findAvailableSocketPort();
     } catch (IOException e) {
       throw new ExecutionException("Cannot allocate a debug port: " + e.getMessage(), e);
     }

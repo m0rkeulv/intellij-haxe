@@ -350,7 +350,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
   @NotNull
   private static String explainRequestFailure(@NotNull Connected connected, @NotNull DisplayRequestException failure) {
     String message = StringUtil.notNullize(failure.getMessage());
-    if (!message.endsWith("empty response")) {
+    if (!failure.isUnexplained()) {
       return message;
     }
     try {

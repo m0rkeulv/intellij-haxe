@@ -8,9 +8,14 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolEnvironment;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
+import com.intellij.util.execution.ParametersListUtil;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,9 +25,10 @@ import java.util.Map;
  * The mechanics every manager of haxe server processes shares: the entries
  * and their console listeners, stop, restart and removal, the handling of a
  * process that died on its own, and the state topic the compiler caches and
- * the server console follow. A subclass contributes how a process is
- * launched ({@link #startLocked}), what a stopped one leaves behind
- * ({@link #clearDerivedState}) and the console's termination line.
+ * the server console follow, plus the start gate ({@link #mayStart}) and the
+ * server command line ({@link #serverCommandLine}). A subclass contributes
+ * how a process is launched ({@link #startLocked}), what a stopped one leaves
+ * behind ({@link #clearDerivedState}) and the console's termination line.
  *
  * A stopped or crashed entry keeps its output backlog, so its console tab
  * survives a restart. All processes stop with the project. Methods whose
@@ -36,6 +42,37 @@ abstract class HaxeServerProcessManager<P extends HaxeServerProcess> implements 
 
   HaxeServerProcessManager(@NotNull Project project) {
     this.project = project;
+  }
+
+  /**
+   * Whether a server may start at all: the compilation server switched on and
+   * the project trusted, since every compile through a server runs project
+   * macros. Clients of a refused start behave as if the server were disabled.
+   */
+  protected boolean mayStart() {
+    return HaxeBuildToolSettings.getInstance(project).isCompilationServerEnabled()
+           && HaxeProjectTrust.checkForBackgroundEvaluation(project);
+  }
+
+  /**
+   * The server's command line: its haxe, the configured server arguments,
+   * then the mode arguments; run in the project directory when there is one
+   * (every request carries its own --cwd, so a missing directory, as in a
+   * test fixture or a freshly moved project, must not fail the start) with
+   * the SDK's folders in front of PATH.
+   */
+  @NotNull
+  protected final GeneralCommandLine serverCommandLine(@NotNull P process, @NotNull String... modeArguments) {
+    List<String> command = new ArrayList<>();
+    command.add(process.executablePath);
+    command.addAll(ParametersListUtil.parse(HaxeBuildToolSettings.getInstance(project).getCompilationServerArguments()));
+    command.addAll(List.of(modeArguments));
+    GeneralCommandLine commandLine = new GeneralCommandLine(command);
+    String basePath = project.getBasePath();
+    if (basePath != null && new File(basePath).isDirectory()) {
+      commandLine.withWorkDirectory(basePath);
+    }
+    return HaxeToolEnvironment.withSdkOnPath(commandLine, HaxeToolPathResolver.findSdk(project, process.sdkName));
   }
 
   @Override

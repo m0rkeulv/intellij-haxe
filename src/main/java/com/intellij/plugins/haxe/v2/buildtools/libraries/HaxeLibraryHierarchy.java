@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -45,7 +44,7 @@ public final class HaxeLibraryHierarchy {
     Set<String> visited = new HashSet<>();
     Deque<String> pending = new ArrayDeque<>();
     for (HaxeLibDependency library : declared) {
-      if (visited.add(key(library.name()))) pending.add(library.name());
+      if (visited.add(HaxeLibDependency.key(library.name()))) pending.add(library.name());
     }
     while (!pending.isEmpty()) {
       String name = pending.remove();
@@ -54,7 +53,7 @@ public final class HaxeLibraryHierarchy {
       if (library == null) continue;
       for (Requirement requirement : library.requires()) {
         edges.add(new Edge(name, requirement.name(), requirement.version()));
-        if (visited.add(key(requirement.name()))) pending.add(requirement.name());
+        if (visited.add(HaxeLibDependency.key(requirement.name()))) pending.add(requirement.name());
       }
     }
     return new HaxeLibraryHierarchy(declared, nodes, edges);
@@ -78,8 +77,4 @@ public final class HaxeLibraryHierarchy {
     return edges;
   }
 
-  @NotNull
-  private static String key(@NotNull String name) {
-    return name.toLowerCase(Locale.ROOT);
-  }
 }

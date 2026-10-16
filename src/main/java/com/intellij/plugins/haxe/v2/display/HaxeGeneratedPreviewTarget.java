@@ -1,7 +1,5 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
@@ -35,8 +33,6 @@ import java.util.concurrent.Future;
  */
 @CustomLog
 public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarget {
-
-  private static final String NOTIFICATION_GROUP = "haxe.compiler";
 
   /** The preview to open, or the reason there is none, as shown to the user. */
   private record Preparation(@Nullable PreparedPreview preview, @Nullable String failure) {
@@ -158,9 +154,6 @@ public final class HaxeGeneratedPreviewTarget implements PsiTarget, PomNamedTarg
   }
 
   private static void notifyFailure(@NotNull Project project, @NotNull String message) {
-    NotificationGroupManager.getInstance()
-      .getNotificationGroup(NOTIFICATION_GROUP)
-      .createNotification(HaxeBundle.message("haxe.generated.preview.failed.title"), message, NotificationType.WARNING)
-      .notify(project);
+    HaxeCompilerNotifications.getInstance(project).warn(HaxeBundle.message("haxe.generated.preview.failed.title"), message);
   }
 }

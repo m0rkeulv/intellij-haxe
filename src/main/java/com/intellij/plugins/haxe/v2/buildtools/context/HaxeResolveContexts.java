@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.context;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -21,7 +22,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.HashSet;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import java.util.Set;
@@ -232,7 +232,7 @@ public final class HaxeResolveContexts implements Disposable {
   private List<Ownership> declaringBuilds(@NotNull VirtualFile file) {
     String haxelib = haxelibOf(file);
     if (haxelib == null) return ownerships();
-    String wanted = haxelib.toLowerCase(Locale.ROOT);
+    String wanted = HaxeLibDependency.key(haxelib);
     List<Ownership> declaring = ownerships().stream()
       .filter(ownership -> ownership.haxelibs().contains(wanted))
       .toList();
@@ -313,10 +313,10 @@ public final class HaxeResolveContexts implements Disposable {
     HaxeLibraryGraph graph = HaxeLibraryGraph.getInstance(project);
     String containerId = HaxeContainers.containerIdFor(project, buildFile.file());
     Set<String> reachable = new HashSet<>();
-    for (HaxeBuildFileInfo.HaxeLibDependency library : info.libraries()) {
-      reachable.add(library.name().toLowerCase(Locale.ROOT));
+    for (HaxeLibDependency library : info.libraries()) {
+      reachable.add(library.key());
       for (String member : graph.closureOf(containerId, library.name())) {
-        reachable.add(member.toLowerCase(Locale.ROOT));
+        reachable.add(HaxeLibDependency.key(member));
       }
     }
     return Set.copyOf(reachable);

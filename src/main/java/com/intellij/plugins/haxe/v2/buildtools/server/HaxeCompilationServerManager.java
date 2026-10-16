@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.server;
 
 import com.intellij.execution.ExecutionException;
-import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
@@ -13,16 +12,13 @@ import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
-import com.intellij.util.execution.ParametersListUtil;
 import com.intellij.util.net.NetUtils;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -64,13 +60,7 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
    * Process creation must stay off the EDT.
    */
   public synchronized int ensureRunning(@Nullable String preferredSdkName) {
-    HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
-    if (!settings.isCompilationServerEnabled()) {
-      return -1;
-    }
-    // Every compile through the server runs project macros, so an untrusted
-    // project gets no server. Clients then behave as if it were disabled.
-    if (!HaxeProjectTrust.checkForBackgroundEvaluation(project)) {
+    if (!mayStart()) {
       return -1;
     }
     String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
@@ -114,7 +104,7 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
     HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
     try {
       int chosenPort = choosePortLocked(settings, process);
-      startProcess(process, serverCommandLine(settings, process, chosenPort));
+      startProcess(process, serverCommandLine(process, "--wait", String.valueOf(chosenPort)));
       process.port = chosenPort;
       log.info("Started haxe compilation server on port " + chosenPort + " (" + process.executablePath + ")");
       fireStateChanged();
@@ -125,25 +115,6 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
       stopProcessLocked(process);
       return -1;
     }
-  }
-
-  @NotNull
-  private GeneralCommandLine serverCommandLine(HaxeBuildToolSettings settings, HaxeServerProcess process, int port) {
-    List<String> command = new ArrayList<>();
-    command.add(process.executablePath);
-    command.addAll(ParametersListUtil.parse(settings.getCompilationServerArguments()));
-    command.add("--wait");
-    command.add(String.valueOf(port));
-
-    GeneralCommandLine commandLine = new GeneralCommandLine(command);
-    // Every request carries its own --cwd, so the server's working directory
-    // does not matter. A missing project directory, as in a test fixture or a
-    // freshly moved project, must not fail the start.
-    String basePath = project.getBasePath();
-    if (basePath != null && new File(basePath).isDirectory()) {
-      commandLine.withWorkDirectory(basePath);
-    }
-    return HaxeToolEnvironment.withSdkOnPath(commandLine, HaxeToolPathResolver.findSdk(project, process.sdkName));
   }
 
   /** The configured fixed port when one is set and no other running instance uses it, otherwise a free port. */
