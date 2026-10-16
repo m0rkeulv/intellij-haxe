@@ -5,7 +5,9 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.Location;
+import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
+import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.DisplayContext;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -23,8 +25,12 @@ import java.util.List;
  * platform calls handlers under a cancelable progress, and the request waits
  * a bounded time. Ctrl-hover asks too, so every hovered reference costs one
  * request.
- *
- * No targets are returned for a declaration under the caret, where the
+ * <p>
+ * A name that neither the server nor the static resolver can place is taken
+ * for a declaration a macro generated into the enclosing member, such as the
+ * parameter a build macro wraps around an expression; its target is the
+ * generated-code preview of that member, where the declaration exists. No
+ * targets are returned for a declaration under the caret, where the
  * platform keeps its show-usages behaviour, nor for a file the compiler
  * cannot serve, where the notification is shown and the platform resolves
  * the reference itself.
@@ -43,7 +49,10 @@ public final class HaxeCompilerGotoDeclarationHandler implements GotoDeclaration
     if (!service.ensureAvailable(file)) return null;
 
     List<PsiElement> declarations = declarationsOf(project, service.definitionUnderReadLock(file, offset));
-    return declarations.isEmpty() ? null : declarations.toArray(PsiElement.EMPTY_ARRAY);
+    if (!declarations.isEmpty()) return declarations.toArray(PsiElement.EMPTY_ARRAY);
+    DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(file);
+    PsiElement generated = context == null ? null : generatedDeclarationOf(reference, context);
+    return generated == null ? null : new PsiElement[]{generated};
   }
 
   @NotNull
@@ -55,5 +64,20 @@ public final class HaxeCompilerGotoDeclarationHandler implements GotoDeclaration
       if (declaration != null) declarations.add(declaration);
     }
     return declarations;
+  }
+
+  /**
+   * The generated-code preview of the member the reference sits in, as the
+   * target for a name the server could not place. Null when the static
+   * resolver places the name (the platform then navigates there itself) or
+   * the reference sits outside a class member. Read action.
+   */
+  @Nullable
+  static PsiElement generatedDeclarationOf(@NotNull HaxeReference reference, @NotNull DisplayContext context) {
+    String name = reference.getReferenceName();
+    HaxeNamedComponent member = HaxeGeneratedPreviewSpot.enclosingMember(reference);
+    if (name == null || member == null || reference.resolve() != null) return null;
+    HaxeGeneratedPreviewSpot spot = HaxeGeneratedPreviewSpot.around(reference, name);
+    return spot == null ? null : HaxeGeneratedPreviewTarget.createElement(member, context, spot);
   }
 }

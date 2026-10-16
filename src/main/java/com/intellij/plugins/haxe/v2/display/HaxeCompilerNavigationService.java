@@ -35,7 +35,8 @@ import java.util.concurrent.Future;
  * the read lock, so it uses the variant that runs the request on a pooled
  * thread and waits cancelably for a bounded time. A file with unsaved
  * changes is invalidated on the server first, because the server ignores
- * {@code contents} for a module it has cached.
+ * {@code contents} for a module it has cached. An offset travels as the
+ * server counts it in the text it reads ({@link HaxeServerOffsets}).
  *
  * Availability is checked up front, as for completion: a file the compiler
  * cannot serve gets no request, and a notification, shown once per project,
@@ -50,7 +51,11 @@ public final class HaxeCompilerNavigationService {
 
   @FunctionalInterface
   private interface Request {
-    List<Location> send(@NotNull Connected connected, @Nullable String contents) throws DisplayRequestException;
+    List<Location> send(@NotNull Connected connected, @NotNull Payload payload) throws DisplayRequestException;
+  }
+
+  /** What a request carries for its file: the unsaved text when there is one, and the offset as the server counts it. */
+  private record Payload(@Nullable String contents, int serverOffset) {
   }
 
   private final Project project;
@@ -79,16 +84,16 @@ public final class HaxeCompilerNavigationService {
   @NotNull
   public List<Location> references(@NotNull VirtualFile file, int offset, @NotNull FindReferencesKind kind) {
     String path = file.getPath();
-    return request(file, DisplayMethods.FIND_REFERENCES,
-                   (connected, contents) -> connected.client().references(connected.args(), path, offset, contents, kind));
+    return request(file, offset, DisplayMethods.FIND_REFERENCES,
+                   (connected, payload) -> connected.client().references(connected.args(), path, payload.serverOffset(), payload.contents(), kind));
   }
 
   /** The declarations of the symbol at the offset; empty when the server gives none. Background thread. */
   @NotNull
   public List<Location> definition(@NotNull VirtualFile file, int offset) {
     String path = file.getPath();
-    return request(file, DisplayMethods.GOTO_DEFINITION,
-                   (connected, contents) -> connected.client().definition(connected.args(), path, offset, contents));
+    return request(file, offset, DisplayMethods.GOTO_DEFINITION,
+                   (connected, payload) -> connected.client().definition(connected.args(), path, payload.serverOffset(), payload.contents()));
   }
 
   /**
@@ -106,20 +111,27 @@ public final class HaxeCompilerNavigationService {
   }
 
   @NotNull
-  private List<Location> request(@NotNull VirtualFile file, @NotNull String method, @NotNull Request request) {
+  private List<Location> request(@NotNull VirtualFile file, int offset, @NotNull String method, @NotNull Request request) {
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
     DisplayContext context = HaxeReadActions.compute(() -> displayService.contextFor(file));
     if (context == null) return List.of();
-    String contents = HaxeReadActions.compute(() -> HaxeCompilerDisplayService.unsavedContents(file));
+    Payload payload = HaxeReadActions.compute(() -> payloadOf(file, offset));
     Connected connected = displayService.connectFor(context, method);
     if (connected == null) return List.of();
     try {
-      displayService.prepareFile(connected, file.getPath(), contents);
-      return request.send(connected, contents);
+      displayService.prepareFile(connected, file.getPath(), payload.contents());
+      return request.send(connected, payload);
     } catch (DisplayRequestException e) {
       log.info(method + " failed for " + file.getPath() + ": " + e.getMessage());
       return List.of();
     }
+  }
+
+  /** Read action. */
+  @NotNull
+  private static Payload payloadOf(@NotNull VirtualFile file, int offset) {
+    String contents = HaxeCompilerDisplayService.unsavedContents(file);
+    return new Payload(contents, HaxeServerOffsets.serverOffset(file, offset, contents));
   }
 
   private void notifyUnavailableOnce() {

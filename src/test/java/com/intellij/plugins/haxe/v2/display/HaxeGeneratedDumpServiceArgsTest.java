@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.plugins.haxe.config.HaxeTarget;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -10,6 +11,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -62,13 +65,36 @@ public class HaxeGeneratedDumpServiceArgsTest {
     assertFalse(args.contains("--no-output"), "lime display hxml disables generation; dumps need it");
   }
 
+  @Test
+  @DisplayName("an interp build keeps eval and lists its main class instead of running it")
+  public void testAnInterpBuildKeepsEvalAndListsItsMainClassInsteadOfRunningIt() {
+    HaxeGeneratedDumpService.DumpBuild build = HaxeGeneratedDumpService.dumpArgs(List.of("-m", "Main", "--dce", "full", "--interp"), DUMP_ROOT);
+
+    assertNotNull(build);
+    assertEquals(HaxeTarget.INTERP, build.target());
+    assertTrue(build.args().contains("--interp"), "the user's target and its defines stay");
+    assertFalse(build.args().contains("-m"), "an entry point would run main right after dumping");
+    int mainClass = build.args().indexOf("Main");
+    assertEquals(List.of("Main", "--macro", "keep('Main')"), build.args().subList(mainClass, mainClass + 3));
+  }
+
+  @Test
+  @DisplayName("a generating target keeps its entry point")
+  public void testAGeneratingTargetKeepsItsEntryPoint() {
+    List<String> args = HaxeGeneratedDumpService.dumpArgs(List.of("-main", "pack.Main", "-js", "out.js"), DUMP_ROOT).args();
+
+    int mainFlag = args.indexOf("-main");
+    assertEquals("pack.Main", args.get(mainFlag + 1));
+    assertFalse(args.contains("--macro"));
+  }
+
   /** (compiler args, why no dump build can come from them). */
   static final List<Arguments> REFUSED_SHAPES = List.of(
     // run shapes are refused
     arguments(List.of("-x", "Main"), "-x executes the program"),
     arguments(List.of("--run", "Main"), "--run executes the program"),
     // target-less arg sets are refused
-    arguments(List.of("-main", "Main", "--interp"), "no generation pass means no dumps"));
+    arguments(List.of("-main", "Main", "--no-output"), "no generation pass means no dumps"));
 
   @ParameterizedTest(name = "{1}")
   @FieldSource("REFUSED_SHAPES")

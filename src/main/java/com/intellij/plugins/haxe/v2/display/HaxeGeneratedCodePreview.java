@@ -69,19 +69,16 @@ public final class HaxeGeneratedCodePreview {
   }
 
   /**
-   * Renders the module dump and locates the named member of the named type
-   * (falling back to the type declaration, then the top of the file).
-   * Involves file IO and a PSI parse, so background threads only.
+   * Renders the module dump and locates the spot's local inside its member,
+   * else the member of its type (falling back to the type declaration, then
+   * the top of the file). Involves file IO and a PSI parse, so background
+   * threads only.
    */
   @Nullable
-  public static PreparedPreview prepare(@NotNull Project project,
-                                        @NotNull Path dumpFile,
-                                        @NotNull String typeDotPath,
-                                        @Nullable String memberName) {
-    LightVirtualFile file = previewFile(dumpFile, typeDotPath);
+  public static PreparedPreview prepare(@NotNull Project project, @NotNull Path dumpFile, @NotNull HaxeGeneratedPreviewSpot spot) {
+    LightVirtualFile file = previewFile(dumpFile, spot.typeDotPath());
     if (file == null) return null;
-    String typeName = StringUtil.getShortName(typeDotPath);
-    int offset = ReadAction.nonBlocking(() -> memberOffset(project, file, typeName, memberName)).executeSynchronously();
+    int offset = ReadAction.nonBlocking(() -> spotOffset(project, file, spot)).executeSynchronously();
     return new PreparedPreview(file, Math.max(offset, 0));
   }
 
@@ -138,26 +135,36 @@ public final class HaxeGeneratedCodePreview {
   }
 
   /**
-   * The offset of the member's NAME, else of the type, else 0. Walks plain
-   * PSI on purpose: the model's member lookup would pull type resolution over
-   * the whole dump, which can be library-sized.
+   * The offset of the local's NAME inside the member, else of the member's
+   * name, else of the type, else 0. Walks plain PSI on purpose: the model's
+   * member lookup would pull type resolution over the whole dump, which can
+   * be library-sized.
    */
-  private static int memberOffset(@NotNull Project project,
-                                  @NotNull LightVirtualFile file,
-                                  @NotNull String typeName,
-                                  @Nullable String memberName) {
+  static int spotOffset(@NotNull Project project, @NotNull LightVirtualFile file, @NotNull HaxeGeneratedPreviewSpot spot) {
     if (!(PsiManager.getInstance(project).findFile(file) instanceof HaxeFile haxeFile)) return 0;
+    String typeName = StringUtil.getShortName(spot.typeDotPath());
     for (HaxeClass haxeClass : haxeFile.getClassList()) {
       if (!typeName.equals(haxeClass.getName())) continue;
-      if (memberName == null) return haxeClass.getTextOffset();
+      if (spot.memberName() == null) return haxeClass.getTextOffset();
       for (HaxeComponentName componentName : PsiTreeUtil.findChildrenOfType(haxeClass, HaxeComponentName.class)) {
-        if (memberName.equals(componentName.getText()) && isMemberDeclaration(componentName)) {
-          return componentName.getTextOffset();
+        if (spot.memberName().equals(componentName.getText()) && isMemberDeclaration(componentName)) {
+          HaxeComponentName local = localIn(componentName.getParent(), spot.localName());
+          return local != null ? local.getTextOffset() : componentName.getTextOffset();
         }
       }
       return haxeClass.getTextOffset();
     }
     return 0;
+  }
+
+  /** The first declaration of the named local (parameter or variable) inside the member, else null. */
+  @Nullable
+  private static HaxeComponentName localIn(@NotNull PsiElement member, @Nullable String localName) {
+    if (localName == null) return null;
+    for (HaxeComponentName componentName : PsiTreeUtil.findChildrenOfType(member, HaxeComponentName.class)) {
+      if (localName.equals(componentName.getText()) && !isMemberDeclaration(componentName)) return componentName;
+    }
+    return null;
   }
 
   /** A field or method name, as opposed to a local variable or parameter sharing the name. */

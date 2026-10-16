@@ -4,7 +4,6 @@ import com.intellij.lang.injection.InjectedLanguageManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.lang.parser.HaxePsiDocCommentImpl;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
-import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.model.HaxeClassReferenceModel;
@@ -16,11 +15,11 @@ import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import static java.util.function.Predicate.not;
 
 public class AnnotatorUtil {
 
@@ -95,33 +94,33 @@ public class AnnotatorUtil {
     return virtualFile != null && virtualFile.getUserData(HaxeGeneratedCodePreview.PREVIEW_KEY) != null;
   }
 
+  /**
+   * Whether a build macro rewrites the class: {@code @:build} on the class
+   * itself, or {@code @:autoBuild} on a class or interface it extends or
+   * implements, at any distance.
+   */
   public static boolean hasMacroForCodeGeneration(@NotNull HaxeClassModel clazz) {
     if (clazz.hasCompileTimeMeta(HaxeMeta.BUILD)) return true;
-
-    List<HaxeClassModel> classModels = clazz.getExtendingTypes().stream()
-      .map(HaxeClassReferenceModel::getHaxeClassModel)
-      .filter(Objects::nonNull)
-      .collect(Collectors.toList());
-
-
-    for (int i = 0; i < classModels.size(); i++) {
-      HaxeClassModel model = classModels.get(i);
-      HaxeClass aClass = model.haxeClass;
-      if (aClass != null) {
-        if (aClass.hasCompileTimeMeta(HaxeMeta.AUTO_BUILD)) {
-          return true;
-        }
-        List<HaxeClassModel> list =
-          model.getExtendingTypes().stream()
-            .map(HaxeClassReferenceModel::getHaxeClassModel)
-            .filter(not(classModels::contains))
-            .toList();
-
-        classModels.addAll(list);
+    List<HaxeClassModel> superTypes = superTypesOf(clazz);
+    for (int i = 0; i < superTypes.size(); i++) {
+      HaxeClassModel model = superTypes.get(i);
+      if (model.hasCompileTimeMeta(HaxeMeta.AUTO_BUILD)) return true;
+      for (HaxeClassModel superType : superTypesOf(model)) {
+        if (!superTypes.contains(superType)) superTypes.add(superType);
       }
     }
-
     return false;
+  }
+
+  /** The resolved classes and interfaces the model extends or implements. */
+  @NotNull
+  private static List<HaxeClassModel> superTypesOf(@NotNull HaxeClassModel model) {
+    List<HaxeClassReferenceModel> references = new ArrayList<>(model.getExtendingTypes());
+    references.addAll(model.getImplementingInterfaces());
+    return references.stream()
+      .map(HaxeClassReferenceModel::getHaxeClassModel)
+      .filter(Objects::nonNull)
+      .collect(Collectors.toCollection(ArrayList::new));
   }
 
 

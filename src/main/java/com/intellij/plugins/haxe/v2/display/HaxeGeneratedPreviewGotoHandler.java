@@ -28,7 +28,7 @@ public class HaxeGeneratedPreviewGotoHandler implements GotoDeclarationHandler {
   public PsiElement @Nullable [] getGotoDeclarationTargets(@Nullable PsiElement sourceElement, int offset, Editor editor) {
     if (sourceElement == null) return null;
     Project project = sourceElement.getProject();
-    if (!HaxeCompilerSettings.getInstance(project).getCompletionMode().usesCompiler()) return null;
+    if (!HaxeCompilerSettings.getInstance(project).usesCompilerNavigation()) return null;
 
     HaxeReferenceExpression reference = PsiTreeUtil.getParentOfType(sourceElement, HaxeReferenceExpression.class, false);
     if (reference == null) return null;
@@ -45,7 +45,7 @@ public class HaxeGeneratedPreviewGotoHandler implements GotoDeclarationHandler {
     HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile);
     if (context == null) return null;
 
-    String memberName = reference.getReferenceName();
-    return new PsiElement[]{HaxeGeneratedPreviewTarget.createElement(resolved, context, dotPath, memberName)};
+    HaxeGeneratedPreviewSpot spot = HaxeGeneratedPreviewSpot.ofType(dotPath, reference.getReferenceName());
+    return new PsiElement[]{HaxeGeneratedPreviewTarget.createElement(resolved, context, spot)};
   }
 }

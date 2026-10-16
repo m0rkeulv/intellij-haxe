@@ -48,7 +48,7 @@ public class HaxeCompilerCompletionContributor extends CompletionContributor {
   @Override
   public void fillCompletionVariants(@NotNull CompletionParameters parameters, @NotNull CompletionResultSet result) {
     Project project = parameters.getPosition().getProject();
-    if (HaxeCompilerSettings.getInstance(project).getCompletionMode() != HaxeCompletionMode.COMPILER_ONLY) return;
+    if (HaxeCompilerSettings.getInstance(project).getEffectiveCompletionMode() != HaxeCompletionMode.COMPILER_ONLY) return;
     result.stopHere();
     VirtualFile file = parameters.getOriginalFile().getVirtualFile();
     if (file == null) return;

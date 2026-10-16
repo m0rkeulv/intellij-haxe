@@ -60,7 +60,7 @@ import org.jetbrains.annotations.TestOnly;
  * The resolve fallback is active only while "Use compiler for IDE features"
  * is on and the compilation server is enabled (Settings | Compiler | Haxe
  * Compiler); the blueprint lookups for completion follow the completion
- * mode. A failing reference asks on every resolve, because the resolve cache
+ * feature and mode. A failing reference asks on every resolve, because the resolve cache
  * sits before this fallback, so a CLEAN answer is remembered per reference
  * until the PSI, a display-context input or the blueprints change; an answer
  * computed while a recursion guard tripped is not.
@@ -217,7 +217,7 @@ public final class HaxeCompilerResolveService {
    */
   @Nullable
   public TypeBlueprint blueprintForType(@NotNull VirtualFile contextFile, @Nullable String dotPath) {
-    if (!HaxeCompilerSettings.getInstance(project).getCompletionMode().usesCompiler()) return null;
+    if (!HaxeCompilerSettings.getInstance(project).usesCompilerCompletion()) return null;
     if (DumbService.isDumb(project)) return null;
     BlueprintLookup lookup = blueprintLookup(contextFile, dotPath);
     return lookup != null ? lookup.blueprint() : null;
@@ -231,7 +231,7 @@ public final class HaxeCompilerResolveService {
    */
   @Nullable
   public HaxeClassModel blueprintClass(@NotNull HaxeCompilerDisplayService.DisplayContext context, @NotNull String dotPath) {
-    if (!HaxeCompilerSettings.getInstance(project).getCompletionMode().usesCompiler()) return null;
+    if (!HaxeCompilerSettings.getInstance(project).usesCompilerCompletion()) return null;
     BlueprintKey key = new BlueprintKey(HaxeCompilerDisplayService.contextKey(context), dotPath);
     TypeBlueprint blueprint = blueprints.get(key);
     if (blueprint == null) {
@@ -367,8 +367,13 @@ public final class HaxeCompilerResolveService {
           blueprints.put(key, blueprint);
           blueprintChanges.incModificationCount();
           failedAt.remove(key);
+          if (log.isDebugEnabled()) {
+            log.debug("blueprint hydrated for " + key.dotPath() + ": " + blueprint.fields().size() + " fields, "
+                      + blueprint.statics().size() + " statics");
+          }
           restartHighlighting();
         } else {
+          if (log.isDebugEnabled()) log.debug("no blueprint for " + key.dotPath() + "; next attempt after " + FAILURE_COOLDOWN_MS + " ms");
           failedAt.put(key, System.currentTimeMillis());
         }
       } catch (Throwable t) {
@@ -446,6 +451,9 @@ public final class HaxeCompilerResolveService {
         // the type does not live in this context - try the next
       }
     }
+    if (log.isDebugEnabled()) {
+      log.debug("server/type: no context answered for " + typeName + " in " + modulePath + " (" + candidates.size() + " candidates)");
+    }
     return null;
   }
 
@@ -460,11 +468,6 @@ public final class HaxeCompilerResolveService {
    * hydrated class per session.
    */
   private void restartHighlighting() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (!project.isDisposed()) {
-        PsiManager.getInstance(project).dropPsiCaches();
-        DaemonCodeAnalyzer.getInstance(project).restart("haxe: compiler resolve results hydrated");
-      }
-    }, ModalityState.nonModal());
+    HaxeCompilerCaches.dropPsiCachesAndRestartLater(project, "haxe: compiler resolve results hydrated");
   }
 }

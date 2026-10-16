@@ -35,7 +35,7 @@ public final class HaxeFindUsagesFactoryProxy extends FindUsagesHandlerFactory {
 
   @Override
   public FindUsagesHandler createFindUsagesHandler(@NotNull PsiElement element, boolean forHighlightUsages) {
-    boolean useCompiler = !forHighlightUsages && HaxeCompilerSettings.getInstance(project).isCompilerIdeFeaturesEnabled();
+    boolean useCompiler = !forHighlightUsages && HaxeCompilerSettings.getInstance(project).usesCompilerFindUsages();
     if (!useCompiler) return staticFactory.createFindUsagesHandler(element, forHighlightUsages);
     if (!canFindUsages(element)) return FindUsagesHandler.NULL_HANDLER;
 
