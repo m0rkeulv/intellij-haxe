@@ -249,8 +249,8 @@ public final class HaxeLibrarySync {
   }
 
   private static void addIfNameAbsent(@NotNull List<DeclaredDependency> dependencies, @NotNull DeclaredDependency declared) {
-    String name = declared.dependency().name();
-    boolean known = dependencies.stream().anyMatch(existing -> existing.dependency().name().equals(name));
+    String key = declared.dependency().key();
+    boolean known = dependencies.stream().anyMatch(existing -> existing.dependency().key().equals(key));
     if (!known) {
       dependencies.add(declared);
     }
@@ -354,8 +354,8 @@ public final class HaxeLibrarySync {
           if (isScmCheckout(section)) entryName += " [git]";
           libraries.merge(managedLibraryName(entryName), section.classpaths(), HaxeLibrarySync::unionPreservingOrder);
         }
-        definesByDependency.put(dependency.name(), defines);
-        closureByDependency.put(dependency.name(), closure);
+        definesByDependency.put(dependency.key(), defines);
+        closureByDependency.put(dependency.key(), closure);
       }
     }
     return new Resolution(libraries, definesByDependency, resolvedLibraries, closureByDependency);

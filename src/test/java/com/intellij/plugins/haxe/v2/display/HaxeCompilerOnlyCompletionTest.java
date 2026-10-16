@@ -35,14 +35,15 @@ public class HaxeCompilerOnlyCompletionTest extends HaxeLightFixtureTestCase {
     settings.setCompilerIdeFeaturesEnabled(true);
     settings.setCompletionMode(HaxeCompletionMode.COMPILER_ONLY);
     HaxeCompilerCompletionService service = HaxeCompilerCompletionService.getInstance(getProject());
-    assertFalse(service.unavailabilityNotifiedForTests());
+    HaxeCompilerNotifications notifications = HaxeCompilerNotifications.getInstance(getProject());
+    assertFalse(notifications.unavailabilityNotifiedForTests());
     myFixture.configureByText("Main.hx", STATEMENT_SOURCE);
 
     myFixture.completeBasic();
     List<String> lookups = myFixture.getLookupElementStrings();
 
     assertTrue(lookups == null || lookups.isEmpty(), "no IDE suggestion may fill in for the compiler: " + lookups);
-    assertTrue(service.unavailabilityNotifiedForTests(), "the missing server must be reported");
+    assertTrue(notifications.unavailabilityNotifiedForTests(), "the missing server must be reported");
     assertFalse(service.ensureAvailable(myFixture.getFile().getVirtualFile()), "the file stays unavailable to the compiler");
   }
 

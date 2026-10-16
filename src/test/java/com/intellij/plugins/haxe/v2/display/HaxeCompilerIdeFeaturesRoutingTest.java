@@ -51,8 +51,7 @@ public class HaxeCompilerIdeFeaturesRoutingTest extends HaxeLightFixtureTestCase
     FindUsagesHandler handler = new HaxeFindUsagesFactoryProxy(getProject()).createFindUsagesHandler(helperDeclaration(), false);
 
     assertSame(FindUsagesHandler.NULL_HANDLER, handler, "no static search may fill in for the compiler");
-    HaxeCompilerNavigationService service = HaxeCompilerNavigationService.getInstance(getProject());
-    assertTrue(service.unavailabilityNotifiedForTests(), "the missing server must be reported");
+    assertTrue(unavailabilityNotified(), "the missing server must be reported");
   }
 
   @Test
@@ -81,8 +80,7 @@ public class HaxeCompilerIdeFeaturesRoutingTest extends HaxeLightFixtureTestCase
     new HaxeGotoDeclarationProxy().getGotoDeclarationTargets(atCaret, offset, myFixture.getEditor());
 
     // the static handler answers nothing here; the absent notification proves the compiler handler was not asked
-    assertFalse(HaxeCompilerNavigationService.getInstance(getProject()).unavailabilityNotifiedForTests(),
-                "the compiler handler was not asked");
+    assertFalse(unavailabilityNotified(), "the compiler handler was not asked");
   }
 
   @Test
@@ -108,8 +106,11 @@ public class HaxeCompilerIdeFeaturesRoutingTest extends HaxeLightFixtureTestCase
 
     // the static handler answers nothing here either; the notification proves the compiler handler was asked
     assertNull(targets, "the compiler handler answers nothing without a server");
-    HaxeCompilerNavigationService service = HaxeCompilerNavigationService.getInstance(getProject());
-    assertTrue(service.unavailabilityNotifiedForTests(), "the missing server must be reported");
+    assertTrue(unavailabilityNotified(), "the missing server must be reported");
+  }
+
+  private boolean unavailabilityNotified() {
+    return HaxeCompilerNotifications.getInstance(getProject()).unavailabilityNotifiedForTests();
   }
 
   private PsiElement helperDeclaration() {

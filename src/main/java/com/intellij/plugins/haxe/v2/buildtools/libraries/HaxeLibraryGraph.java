@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
 import com.intellij.openapi.components.Service;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -8,7 +9,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -56,7 +56,7 @@ public final class HaxeLibraryGraph {
   /** The resolved library of the name, whatever its case; null when no sync resolved it. */
   @Nullable
   public Library library(@NotNull String name) {
-    return libraries.get(key(name));
+    return libraries.get(HaxeLibDependency.key(name));
   }
 
   /** Every resolved library, in sync order. */
@@ -68,10 +68,10 @@ public final class HaxeLibraryGraph {
   /** The libraries whose haxelib.json requires the named one, in sync order. */
   @NotNull
   public List<Library> dependentsOf(@NotNull String name) {
-    String wanted = key(name);
+    String wanted = HaxeLibDependency.key(name);
     List<Library> dependents = new ArrayList<>();
     for (Library library : libraries.values()) {
-      boolean requiresIt = library.requires().stream().anyMatch(requirement -> key(requirement.name()).equals(wanted));
+      boolean requiresIt = library.requires().stream().anyMatch(requirement -> HaxeLibDependency.key(requirement.name()).equals(wanted));
       if (requiresIt) dependents.add(library);
     }
     return dependents;
@@ -85,17 +85,17 @@ public final class HaxeLibraryGraph {
   @NotNull
   public List<String> closureOf(@NotNull String containerId, @NotNull String declaredLibrary) {
     Map<String, List<String>> byDeclared = closures.getOrDefault(containerId, Map.of());
-    return byDeclared.getOrDefault(key(declaredLibrary), List.of());
+    return byDeclared.getOrDefault(HaxeLibDependency.key(declaredLibrary), List.of());
   }
 
   /** Replaces the whole picture with a sync's result; keys may come in any case. */
   public void replaceAll(@NotNull Map<String, Library> byName, @NotNull Map<String, Map<String, List<String>>> closuresByContainer) {
     Map<String, Library> normalizedLibraries = new LinkedHashMap<>();
-    byName.forEach((name, library) -> normalizedLibraries.put(key(name), library));
+    byName.forEach((name, library) -> normalizedLibraries.put(HaxeLibDependency.key(name), library));
     Map<String, Map<String, List<String>>> normalizedClosures = new LinkedHashMap<>();
     closuresByContainer.forEach((containerId, byDeclared) -> {
       Map<String, List<String>> normalized = new LinkedHashMap<>();
-      byDeclared.forEach((declared, members) -> normalized.put(key(declared), List.copyOf(members)));
+      byDeclared.forEach((declared, members) -> normalized.put(HaxeLibDependency.key(declared), List.copyOf(members)));
       normalizedClosures.put(containerId, Map.copyOf(normalized));
     });
     libraries = Map.copyOf(normalizedLibraries);
@@ -103,8 +103,4 @@ public final class HaxeLibraryGraph {
     synced = true;
   }
 
-  @NotNull
-  private static String key(@NotNull String name) {
-    return name.toLowerCase(Locale.ROOT);
-  }
 }

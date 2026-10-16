@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.execution.DefaultExecutionResult;
+import com.intellij.util.net.NetUtils;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionResult;
 import com.intellij.execution.Executor;
@@ -23,7 +24,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Path;
 
 /**
@@ -162,8 +162,8 @@ public class BrowserProfilingState implements RunProfileState {
   }
 
   private static int freePort() throws ExecutionException {
-    try (ServerSocket probe = new ServerSocket(0)) {
-      return probe.getLocalPort();
+    try {
+      return NetUtils.findAvailableSocketPort();
     }
     catch (IOException e) {
       throw new ExecutionException(HaxeDebuggerBundle.message("browser.runner.server.failed", e.getMessage()), e);

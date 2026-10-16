@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.execution.Executor;
+import com.intellij.util.net.NetUtils;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -26,7 +27,6 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -51,8 +51,8 @@ public class HaxeIuTracyCapture implements HaxeTracyCapture {
   public @Nullable Handle start(@NotNull Project project, @NotNull String displayName, @NotNull Path sessionFile,
                                 @NotNull Executor executor) {
     int port;
-    try (ServerSocket probe = new ServerSocket(0)) {
-      port = probe.getLocalPort();
+    try {
+      port = NetUtils.findAvailableSocketPort();
     }
     catch (IOException e) {
       LOG.warn("could not allocate a tracy port", e);

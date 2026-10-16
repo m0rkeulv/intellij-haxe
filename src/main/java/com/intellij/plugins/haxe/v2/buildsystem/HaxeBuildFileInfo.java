@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /// What a Haxe build/project file declares: the compilation target (HXML only —
@@ -79,6 +80,19 @@ public record HaxeBuildFileInfo(@Nullable HaxeTarget target,
     public static HaxeLibDependency parse(@NotNull String value) {
       String[] parts = value.split(":", 2);
       return new HaxeLibDependency(parts[0], parts.length > 1 ? parts[1] : null);
+    }
+
+    /// The key two spellings of one library share: haxelib names are case-insensitive
+    /// (`OpenFL` and `openfl` are one library), so every lookup keyed by a library name uses this.
+    @NotNull
+    public static String key(@NotNull String name) {
+      return name.toLowerCase(Locale.ROOT);
+    }
+
+    /** {@link #key(String)} of this dependency's name. */
+    @NotNull
+    public String key() {
+      return key(name);
     }
   }
 }

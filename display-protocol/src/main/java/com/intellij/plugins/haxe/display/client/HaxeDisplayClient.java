@@ -241,7 +241,8 @@ public class HaxeDisplayClient {
   private JsonNode sendDisplayRequest(List<String> args, String method, int timeoutMs) throws DisplayRequestException {
     DisplayResponse response = channel.request(args, timeoutMs);
     if (response.payload().isEmpty()) {
-      throw new DisplayRequestException("Display request '" + method + "' got no result: " + failureDetail(response), response.hasError());
+      String message = "Display request '" + method + "' got no result: " + failureDetail(response);
+      throw new DisplayRequestException(message, response.hasError(), isUnexplained(response));
     }
     return unwrapClassified(method, response);
   }
@@ -282,6 +283,11 @@ public class HaxeDisplayClient {
       if (!response.hasError()) throw e;
       throw new DisplayRequestException("Display request '" + method + "' failed: " + failureDetail(response), true, e);
     }
+  }
+
+  /** Whether the response explains nothing: no error marker and no log line. */
+  private static boolean isUnexplained(DisplayResponse response) {
+    return !response.hasError() && response.logs().stream().allMatch(String::isBlank);
   }
 
   /**

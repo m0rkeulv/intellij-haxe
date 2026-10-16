@@ -20,7 +20,6 @@ import org.jetbrains.annotations.TestOnly;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -95,7 +94,7 @@ public final class HaxeInstalledLibraries {
   @NotNull
   public static LibraryStatus status(@Nullable Map<String, InstalledLibrary> installed, @NotNull HaxeLibDependency library) {
     if (installed == null) return new LibraryStatus(true, null);
-    InstalledLibrary installedLibrary = installed.get(library.name().toLowerCase(Locale.ROOT));
+    InstalledLibrary installedLibrary = installed.get(library.key());
     if (installedLibrary == null) return new LibraryStatus(false, null);
     // a pinned version must itself be installed - the name alone is not
     // enough. A git checkout is listed as version "git", never as its
@@ -149,7 +148,7 @@ public final class HaxeInstalledLibraries {
     Map<String, InstalledLibrary> byName = new HashMap<>();
     for (String name : index.getInstalledLibraries()) {
       InstalledLibrary library = new InstalledLibrary(index.getSelectedVersion(name), index.getInstalledVersions(name));
-      byName.put(name.toLowerCase(Locale.ROOT), library);
+      byName.put(HaxeLibDependency.key(name), library);
     }
     return byName;
   }

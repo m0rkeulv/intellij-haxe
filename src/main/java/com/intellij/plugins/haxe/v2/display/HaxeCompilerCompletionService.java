@@ -1,27 +1,19 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.notification.Notification;
-import com.intellij.notification.NotificationAction;
-import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.protocol.CompletionItem;
 import com.intellij.plugins.haxe.display.protocol.CompletionList;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
-import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompletionMode;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.TestOnly;
 
 import java.util.concurrent.Future;
 
@@ -37,7 +29,7 @@ import java.util.concurrent.Future;
  *
  * Completion runs under a read action, which must not wait on the network.
  * The request therefore runs on a pooled thread, and the caller waits for at
- * most {@link #ANSWER_TIMEOUT_MS}. Typing cancels the wait. A slow answer,
+ * most {@link HaxeCancelableFutures#ANSWER_TIMEOUT_MS}. Typing cancels the wait. A slow answer,
  * such as from a server that is still starting or from a {@code lime display} run,
  * is abandoned. The request still completes, so the next popup gets a faster
  * answer.
@@ -46,11 +38,7 @@ import java.util.concurrent.Future;
 @CustomLog
 public final class HaxeCompilerCompletionService {
 
-  private static final String NOTIFICATION_GROUP = "haxe.compiler";
-  private static final long ANSWER_TIMEOUT_MS = 3_000;
-
   private final Project project;
-  private volatile boolean unavailabilityNotified;
 
   public static HaxeCompilerCompletionService getInstance(@NotNull Project project) {
     return project.getService(HaxeCompilerCompletionService.class);
@@ -71,6 +59,15 @@ public final class HaxeCompilerCompletionService {
     return available;
   }
 
+  private void notifyUnavailableOnce() {
+    HaxeCompilerNotifications.getInstance(project).notifyUnavailableOnce(
+      "haxe.compiler.completion.unavailable.title",
+      "haxe.compiler.completion.unavailable.content",
+      "haxe.compiler.completion.unavailable.configure",
+      "haxe.compiler.completion.unavailable.use.ide",
+      () -> HaxeCompilerSettings.getInstance(project).setCompletionMode(HaxeCompletionMode.IDE_ONLY));
+  }
+
   /**
    * The compiler's items at the offset, or null when the server gives no
    * answer within the timeout. A cancelled completion ends in the platform's
@@ -87,7 +84,7 @@ public final class HaxeCompilerCompletionService {
     int serverOffset = HaxeServerOffsets.serverOffset(file, offset, sentContents);
     Future<CompletionList> request = ApplicationManager.getApplication()
       .executeOnPooledThread(() -> fetch(displayService, context, path, sentContents, serverOffset, autoTriggered));
-    return HaxeCancelableFutures.awaitUnderReadLock(request, ANSWER_TIMEOUT_MS, "display/completion for " + path);
+    return HaxeCancelableFutures.awaitUnderReadLock(request, HaxeCancelableFutures.ANSWER_TIMEOUT_MS, "display/completion for " + path);
   }
 
   /**
@@ -127,31 +124,4 @@ public final class HaxeCompilerCompletionService {
     }
   }
 
-  private void notifyUnavailableOnce() {
-    if (unavailabilityNotified) return;
-    unavailabilityNotified = true;
-    String title = HaxeBundle.message("haxe.compiler.completion.unavailable.title");
-    String content = HaxeBundle.message("haxe.compiler.completion.unavailable.content");
-    Notification notification = NotificationGroupManager.getInstance()
-      .getNotificationGroup(NOTIFICATION_GROUP)
-      .createNotification(title, content, NotificationType.WARNING);
-    notification.addAction(NotificationAction.createSimpleExpiring(
-      HaxeBundle.message("haxe.compiler.completion.unavailable.configure"),
-      () -> ShowSettingsUtil.getInstance().showSettingsDialog(project, HaxeBuildToolsConfigurable.class)));
-    notification.addAction(NotificationAction.createSimpleExpiring(
-      HaxeBundle.message("haxe.compiler.completion.unavailable.use.ide"),
-      () -> HaxeCompilerSettings.getInstance(project).setCompletionMode(HaxeCompletionMode.IDE_ONLY)));
-    notification.notify(project);
-  }
-
-  @TestOnly
-  public boolean unavailabilityNotifiedForTests() {
-    return unavailabilityNotified;
-  }
-
-  /** Arms the once-per-project notification again; the shared light project otherwise keeps it fired between tests. */
-  @TestOnly
-  public void resetUnavailabilityNotificationForTests() {
-    unavailabilityNotified = false;
-  }
 }

@@ -515,7 +515,7 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
     Map<String, Map<String, String>> byDependency = HaxeLibraryDefinesStore.getInstance(project).definesByDependency(containerId);
     Map<String, String> defines = new LinkedHashMap<>();
     for (HaxeLibDependency library : info.libraries()) {
-      byDependency.getOrDefault(library.name(), Map.of())
+      byDependency.getOrDefault(library.key(), Map.of())
         .forEach((name, value) -> defines.put(HaxeDefine.compilerName(name), value));
     }
     return defines;
