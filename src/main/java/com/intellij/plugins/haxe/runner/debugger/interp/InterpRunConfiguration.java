@@ -52,7 +52,6 @@ public class InterpRunConfiguration extends DapRunConfigurationBase {
   private static final String COMPILER_ARGUMENTS = "compilerArguments";
   private static final String WORKING_DIRECTORY = "workingDirectory";
   private static final String RUN_AS_INTERPRETER = "runAsInterpreter";
-  private static final String HXML_EXTENSION = ".hxml";
 
   @Getter private String compilerArguments = "";
   @Getter private String workingDirectory = "";
@@ -159,7 +158,7 @@ public class InterpRunConfiguration extends DapRunConfigurationBase {
   /** The first argument naming an existing hxml, resolved against the working directory as the compiler does. */
   private @Nullable Path namedHxml(@Nullable Path workDirectory) {
     for (String argument : ParametersListUtil.parse(compilerArguments)) {
-      if (!argument.endsWith(HXML_EXTENSION)) continue;
+      if (!HxmlFileParser.isHxmlReference(argument)) continue;
       Path resolved = resolveOrNull(workDirectory, argument);
       if (resolved != null && Files.isRegularFile(resolved)) return resolved.toAbsolutePath().normalize();
     }
@@ -188,7 +187,7 @@ public class InterpRunConfiguration extends DapRunConfigurationBase {
    * referencing file.
    */
   static boolean hxmlDeclaresInterp(String argument, @Nullable Path workDirectory) {
-    if (!argument.endsWith(HXML_EXTENSION)) return false;
+    if (!HxmlFileParser.isHxmlReference(argument)) return false;
     String content = readOrNull(resolveOrNull(workDirectory, argument));
     if (content == null) return false;
     String effective = HxmlFileParser.flatten(content, reference -> readOrNull(resolveOrNull(workDirectory, reference)));

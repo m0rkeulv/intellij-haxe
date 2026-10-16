@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.nodejs;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapEndpoint;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.AdapterTargetsSmartStepHandler;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
@@ -71,7 +72,7 @@ public class NodeDebugBackend implements DapBackend {
     NodeLocator.requireModern(nodeExecutable);
     AdapterStore store = AdapterStores.open();
     Path dapServerJs = JsDebugAdapters.installedEntry(store, AdapterPin.JS_DEBUG);
-    JsAdapterLauncher.LaunchedAdapter launched = JsAdapterLauncher.launchJsDebug(nodeExecutable, dapServerJs);
+    AdapterProcess launched = JsAdapterLauncher.launchJsDebug(nodeExecutable, dapServerJs);
     adapterProcess = launched.process();
     adapterStdout = launched.stdout();
 

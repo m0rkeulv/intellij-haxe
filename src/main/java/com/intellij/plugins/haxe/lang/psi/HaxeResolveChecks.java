@@ -188,25 +188,16 @@ public final class HaxeResolveChecks {
   }
 
   /**
-   * Checks if reference is to a method or field that does not exist in the std but that the compiler accepts
-   *  there are several variants some are on instances like `.bind`and  `.code`
-   *  this method only handles "stand alone"  like `__cpp__`  `__js`etc
-   *  <br/>
-   *  see haxe manual <a href="https://haxe.org/manual/target-syntax.html">target-syntax</a> for details
+   * An untyped target-syntax call (`__js__`, `__cpp__`, ...): the compiler accepts
+   * these without a std declaration, so they resolve to the synthetic ones
+   * ({@link HaxeSyntheticDeclarations}). Instance forms like `.code` are not
+   * handled here. See the haxe manual's
+   * <a href="https://haxe.org/manual/target-syntax.html">target-syntax</a>.
    */
     static List<? extends PsiElement> checkIsFakeReference(@NotNull HaxeReference reference, String referenceText) {
-      return switch (referenceText) {
-          // currently as of 4.3.7  only some of these has a `Syntax.code` implementation
-          case "__js__" ->  createSyntheticForSyntax(referenceText, "js.Syntax.code", reference);
-          case "__php__" ->  createSyntheticForSyntax(referenceText, "php.Syntax.code", reference);
-          case "__python__" ->  createSyntheticForSyntax(referenceText, "python.Syntax.code", reference);
-          case "__cpp__" ->  createSyntheticForSyntax(referenceText, "cpp.Syntax.code", reference);
-          case "__cs__" ->  createSyntheticForSyntax(referenceText, "cs.Syntax.code", reference);
-          case "__java__" ->  createSyntheticForSyntax(referenceText, "java.Syntax.code", reference);
-          case "__lua__" ->  createSyntheticForSyntax(referenceText, "lua.Syntax.code", reference);
-          case null, default -> null;
-        };
-
+      if (referenceText == null) return null;
+      HaxeMethod method = HaxeSyntheticDeclarations.targetSyntaxMethod(reference.getProject(), referenceText);
+      return method == null ? null : List.of(method);
     }
 
   private static boolean removeNonTypeComponents(PsiElement element) {
@@ -1053,9 +1044,10 @@ public final class HaxeResolveChecks {
     return null;
   }
 
+  /** A bare `trace` resolves to its synthetic declaration; checked after members and imports, so a declared trace wins. */
   static List<? extends PsiElement> checkGlobalAlias(HaxeReference reference, String referenceText) {
-    if ("trace".equals(referenceText)) {
-      return getOrCreateSyntheticForTrace(reference);
+    if (HaxeSyntheticDeclarations.TRACE.equals(referenceText)) {
+      return List.of(HaxeSyntheticDeclarations.traceMethod(reference.getProject()));
     }
     return null;
   }
@@ -3007,19 +2999,10 @@ public final class HaxeResolveChecks {
       if (fakePsi != null) {
         return Collections.singletonList(fakePsi);
       } else {
-        fakePsi = HaxeSyntheticPsiUtil.createFakeForBind(haxeIdentifier, namedComponent);
+        fakePsi = new HaxeFakeComponentBindMethod(haxeIdentifier, namedComponent);
         reference.putUserData(FAKE_PSI_KEY, fakePsi);
         return Collections.singletonList(fakePsi);
       }
     }
   }
-
-  private static @NonNull List<PsiElement> createSyntheticForSyntax(String name, String qname, HaxeReference reference) {
-    return List.of(HaxeSyntheticPsiUtil.createSyntheticForTargetSpecificSyntax(name, qname, reference));
-  }
-
-  private static @NonNull List<PsiElement> getOrCreateSyntheticForTrace(HaxeReference reference) {
-    return List.of(HaxeSyntheticPsiUtil.createSyntheticForTrace(reference.getProject()));
-  }
-
 }

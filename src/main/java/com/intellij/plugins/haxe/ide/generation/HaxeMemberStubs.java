@@ -18,9 +18,15 @@ public final class HaxeMemberStubs {
   private HaxeMemberStubs() {
   }
 
+  /** The body for a method that must return a value, or the empty one. */
+  @NotNull
+  public static String body(boolean returnsValue) {
+    return returnsValue ? THROWING_BODY : EMPTY_BODY;
+  }
+
   @NotNull
   public static String bodyFor(@Nullable String returnTypeText) {
-    return returnsValue(returnTypeText) ? THROWING_BODY : EMPTY_BODY;
+    return body(returnsValue(returnTypeText));
   }
 
   /** Whether a method with this declared return type must return something; {@code Void} and no declared type do not. */

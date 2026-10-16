@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
@@ -128,7 +129,7 @@ public class BrowserDebugBackend implements DapBackend {
   private DapClient connectFirefox(Path node, AdapterStore store, String targetUrl) throws IOException {
     Path adapterEntry = JsDebugAdapters.installedEntry(store, AdapterPin.FIREFOX);
     launchConfig = firefoxLaunchConfig(targetUrl);
-    JsAdapterLauncher.LaunchedAdapter launched = JsAdapterLauncher.launch(node, adapterEntry);
+    AdapterProcess launched = JsAdapterLauncher.launch(node, adapterEntry);
     adapterProcess = launched.process();
     adapterStdout = launched.stdout();
     return JsDebugSessions.connectWithRetry(launched.port());
@@ -165,7 +166,7 @@ public class BrowserDebugBackend implements DapBackend {
   private DapEndpoint connectChromium(
     Path node, AdapterStore store, String targetUrl) throws IOException {
     Path dapServerJs = JsDebugAdapters.installedEntry(store, AdapterPin.JS_DEBUG);
-    JsAdapterLauncher.LaunchedAdapter launched = JsAdapterLauncher.launchJsDebug(node, dapServerJs);
+    AdapterProcess launched = JsAdapterLauncher.launchJsDebug(node, dapServerJs);
     adapterProcess = launched.process();
     adapterStdout = launched.stdout();
 

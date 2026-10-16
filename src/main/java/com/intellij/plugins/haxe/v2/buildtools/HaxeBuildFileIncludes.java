@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.io.OSAgnosticPathUtil;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -93,7 +94,7 @@ public final class HaxeBuildFileIncludes {
     if (content == null || folder == null) return;
     for (String path : ProjectXmlParser.parseIncludePaths(content)) {
       // TODO: a ${...} path needs lime's variable substitution (haxelib paths, defines); such includes are not watched
-      if (path.contains("${")) continue;
+      if (ProjectXmlVocabulary.isToolExpanded(path)) continue;
       VirtualFile included = includeFile(folder, path);
       if (included == null || !fileIndex.isInContent(included)) continue;
       if (visited.add(included.getPath())) {

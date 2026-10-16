@@ -1,6 +1,8 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
 import com.intellij.openapi.module.Module;
+import java.util.HashSet;
+import java.io.IOException;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
@@ -8,7 +10,11 @@ import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.plugins.haxe.ide.projectStructure.detection.HaxeProjectFileDetectionUtil;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
+import com.intellij.plugins.haxe.buildsystem.hxp.HxpFileType;
+import com.intellij.plugins.haxe.buildsystem.lime.LimeProjectShape;
+import com.intellij.plugins.haxe.buildsystem.nmml.NMMLFileType;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
 import com.intellij.plugins.haxe.lang.psi.HaxeType;
@@ -34,14 +40,26 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class HaxeBuildFileScanner {
 
   /** Every extension {@link #detectType} classifies - the Add Build File chooser's filter. */
-  public static final Set<String> BUILD_FILE_EXTENSIONS = Set.of("hxml", "hxp", "nmml", "xml", "lime");
+  public static final Set<String> BUILD_FILE_EXTENSIONS = buildFileExtensions();
 
   private HaxeBuildFileScanner() {
   }
 
+  private static Set<String> buildFileExtensions() {
+    Set<String> extensions = new HashSet<>(LimeProjectShape.FILE_EXTENSIONS);
+    extensions.add(HXMLFileType.DEFAULT_EXTENSION);
+    extensions.add(HxpFileType.DEFAULT_EXTENSION);
+    extensions.add(NMMLFileType.DEFAULT_EXTENSION);
+    return Set.copyOf(extensions);
+  }
+
   /** Whether the path's extension is one a build file can carry; the content decides the rest ({@link #detectType}). */
   public static boolean hasBuildFileExtension(@NotNull String path) {
-    return BUILD_FILE_EXTENSIONS.contains(FileUtilRt.getExtension(path).toLowerCase(Locale.ROOT));
+    return BUILD_FILE_EXTENSIONS.contains(extensionOf(path));
+  }
+
+  private static String extensionOf(@NotNull String path) {
+    return FileUtilRt.getExtension(path).toLowerCase(Locale.ROOT);
   }
 
   @NotNull
@@ -122,19 +140,42 @@ public final class HaxeBuildFileScanner {
   }
 
   private static HaxeBuildFileType doDetectType(@NotNull Project project, @NotNull VirtualFile file) {
-    String extension = file.getExtension();
-    if (extension == null) return null;
-    return switch (extension.toLowerCase(Locale.ROOT)) {
-      case "hxml" -> HaxeBuildFileType.HXML;
-      case "hxp" -> isLimeHxpProject(project, file) ? HaxeBuildFileType.HXP_PROJECT : HaxeBuildFileType.HXP_SCRIPT;
-      case "nmml" -> HaxeProjectFileDetectionUtil.isNMMLProject(file) ? HaxeBuildFileType.NMML : null;
-      case "xml", "lime" -> {
-        if (HaxeProjectFileDetectionUtil.isOpenFLProject(file)) yield HaxeBuildFileType.OPENFL;
-        if (HaxeProjectFileDetectionUtil.isLimeProject(file)) yield HaxeBuildFileType.LIME;
-        yield null;
-      }
-      default -> null;
+    String extension = extensionOf(file.getName());
+    return switch (extension) {
+      case HXMLFileType.DEFAULT_EXTENSION -> HaxeBuildFileType.HXML;
+      case HxpFileType.DEFAULT_EXTENSION -> isLimeHxpProject(project, file) ? HaxeBuildFileType.HXP_PROJECT : HaxeBuildFileType.HXP_SCRIPT;
+      case NMMLFileType.DEFAULT_EXTENSION -> nmmlType(file);
+      default -> LimeProjectShape.FILE_EXTENSIONS.contains(extension) ? limeFamilyType(file) : null;
     };
+  }
+
+  /**
+   * Any file under NME's extension with a {@code <project>} root. NME needs no
+   * {@code <haxelib>} or {@code <source>} (it adds itself and uses the project
+   * folder), and a project declaring the openfl lib is still built by NME.
+   */
+  @Nullable
+  private static HaxeBuildFileType nmmlType(@NotNull VirtualFile file) {
+    return shapeOf(file).projectRoot() ? HaxeBuildFileType.NMML : null;
+  }
+
+  /** Under the Lime extensions a {@code <project>} with a library or a source path is Lime's, OpenFL's when that library is openfl; anything else (a maven pom) is nobody's. */
+  @Nullable
+  private static HaxeBuildFileType limeFamilyType(@NotNull VirtualFile file) {
+    LimeProjectShape shape = shapeOf(file);
+    if (shape.isOpenfl()) return HaxeBuildFileType.OPENFL;
+    return shape.isLime() ? HaxeBuildFileType.LIME : null;
+  }
+
+  /** The file's project-file shape as on disk, which the detection cache's VFS stamp tracks; {@link LimeProjectShape#NONE} when it cannot be read. */
+  @NotNull
+  private static LimeProjectShape shapeOf(@NotNull VirtualFile file) {
+    try {
+      return ProjectXmlParser.parseShape(VfsUtilCore.loadText(file));
+    }
+    catch (IOException e) {
+      return LimeProjectShape.NONE;
+    }
   }
 
   /**

@@ -99,7 +99,7 @@ public final class HxmlArguments {
         i++;
         continue;
       }
-      if (arg.endsWith(".hxml") && expandReference(arg, cwd, expanding, out)) continue;
+      if (HxmlFileParser.isHxmlReference(arg) && expandReference(arg, cwd, expanding, out)) continue;
       out.add(arg);
     }
   }

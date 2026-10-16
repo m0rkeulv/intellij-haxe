@@ -45,7 +45,7 @@ public record HxmlIncludeTree(@NotNull VirtualFile file, @NotNull HaxeBuildFileI
     List<HxmlIncludeTree> includes = new ArrayList<>();
     for (String rawLine : content.lines().toList()) {
       String line = rawLine.trim();
-      if (!HxmlFileParser.isIncludeReference(line)) {
+      if (!HxmlFileParser.isHxmlReference(line)) {
         ownLines.add(rawLine);
         continue;
       }

@@ -10,8 +10,10 @@ import org.jetbrains.annotations.Nullable;
 @UtilityClass
 public class LimeOpenFlUtil {
 
-  public boolean looksLikeALimeProjectFile(@NotNull XmlTag rootTag) {
-    return LimeProjectShape.of(rootTag).isLimeFamily();
+  /** Whether the file is a Lime or OpenFL project file: under a Lime extension with the lime-family shape. */
+  public boolean isLimeFamilyFile(@NotNull XmlFile file) {
+    LimeProjectShape shape = shapeOf(file);
+    return shape != null && shape.isLimeFamily();
   }
 
   public boolean isOpenFlFile(@NotNull XmlFile file) {

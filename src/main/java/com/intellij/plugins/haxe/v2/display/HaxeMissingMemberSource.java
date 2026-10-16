@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.plugins.haxe.display.protocol.MissingFields;
+import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
 import com.intellij.plugins.haxe.ide.generation.HaxeMemberStubs;
 import com.intellij.plugins.haxe.model.HaxeAccessorType;
 import org.jetbrains.annotations.NotNull;
@@ -39,7 +40,8 @@ final class HaxeMissingMemberSource {
   @NotNull
   private static String methodText(@NotNull MissingFields.MissingField field) {
     String returnType = HaxeTypeSyntax.returnTypeText(field.type());
-    String body = HaxeMemberStubs.bodyFor(returnType);
+    JsonTypeRef wireReturnType = field.type() == null ? null : field.type().returnType();
+    String body = HaxeMemberStubs.body(wireReturnType == null || !wireReturnType.isVoid());
     String parameters = field.type() != null && field.type().isFunction() ? HaxeTypeSyntax.parameterListText(field.type()) : "";
     return modifiers(field) + "function " + field.name() + "(" + parameters + "):" + returnType + " " + body;
   }

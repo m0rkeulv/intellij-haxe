@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.inspections.buildfiles;
 
 import com.intellij.codeInspection.LocalInspectionTool;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -13,7 +14,6 @@ import com.intellij.psi.xml.XmlAttribute;
 import com.intellij.psi.xml.XmlAttributeValue;
 import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /// An `<include path>` (legacy `name`) of a Lime, OpenFL or NME project file
 /// naming nothing on disk: the path itself, or a folder without the
@@ -22,8 +22,6 @@ import org.jetbrains.annotations.Nullable;
 /// A `${...}` path takes Lime's substitution and is not checked;
 /// `<include haxelib>` names a library, not a path.
 public class HaxeMissingIncludeFileInspection extends LocalInspectionTool {
-  private static final String INCLUDE_TAG = "include";
-  private static final String HAXELIB_ATTRIBUTE = "haxelib";
 
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
@@ -44,22 +42,15 @@ public class HaxeMissingIncludeFileInspection extends LocalInspectionTool {
 
     @Override
     public void visitXmlTag(@NotNull XmlTag tag) {
-      if (!INCLUDE_TAG.equalsIgnoreCase(tag.getLocalName()) || tag.getAttribute(HAXELIB_ATTRIBUTE) != null) return;
-      XmlAttributeValue pathValue = includePathValue(tag);
+      if (!ProjectXmlVocabulary.INCLUDE_ELEMENT.equalsIgnoreCase(tag.getLocalName())) return;
+      if (tag.getAttribute(ProjectXmlVocabulary.HAXELIB_ATTRIBUTE) != null) return;
+      XmlAttribute pathAttribute = ProjectXmlVocabulary.pathAttribute(tag);
+      XmlAttributeValue pathValue = pathAttribute == null ? null : pathAttribute.getValueElement();
       if (pathValue == null) return;
       String path = pathValue.getValue().trim();
-      if (path.isEmpty() || path.contains("${")) return;
+      if (path.isEmpty() || ProjectXmlVocabulary.isToolExpanded(path)) return;
       if (HaxeBuildFileIncludes.includeFile(folder, path) != null) return;
       String message = HaxeBundle.message("haxe.inspections.missing.include.message", path);
       holder.registerProblem(pathValue, HaxeXmlAttributeValues.valueRange(pathValue), message);
-    }
-
-    /** The {@code path} attribute, or the legacy {@code name} one. */
-    @Nullable
-    private static XmlAttributeValue includePathValue(@NotNull XmlTag tag) {
-      XmlAttribute attribute = tag.getAttribute("path");
-      if (attribute == null) attribute = tag.getAttribute("name");
-      return attribute == null ? null : attribute.getValueElement();
-    }
-  }
+    }  }
 }

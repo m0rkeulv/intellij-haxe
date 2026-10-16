@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.javascript;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.*;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
@@ -22,7 +23,6 @@ public final class JsDebugSessions {
   private static final int CONNECT_TIMEOUT_MILLIS = 15_000;
   private static final long CONNECT_RETRY_WINDOW_MILLIS = 10_000;
   private static final long PARENT_HANDSHAKE_TIMEOUT_MILLIS = 60_000;
-  private static final long ADAPTER_KILL_WAIT_SECONDS = 2;
 
   private JsDebugSessions() {
   }
@@ -71,18 +71,7 @@ public final class JsDebugSessions {
   /** Relays the adapter's own stdout and the mux's log into the console; a backend hands in its reader and mux. */
   public static void startBackgroundOutput(@Nullable BufferedReader adapterStdout, @Nullable JsDebugSessionMux mux, Consumer<String> sink) {
     if (adapterStdout != null) {
-      Thread gobbler = new Thread(() -> {
-        try (BufferedReader stdout = adapterStdout) {
-          String line;
-          while ((line = stdout.readLine()) != null) {
-            sink.accept("[adapter] " + line);
-          }
-        } catch (IOException ignored) {
-          // adapter ended
-        }
-      }, "Browser adapter output");
-      gobbler.setDaemon(true);
-      gobbler.start();
+      AdapterProcess.drainOutput(adapterStdout, sink);
     }
     if (mux != null) {
       // the mux owns the parent pumping and worker attachment
@@ -115,7 +104,7 @@ public final class JsDebugSessions {
       adapter.descendants().forEach(ProcessHandle::destroyForcibly);
       adapter.destroy();
       try {
-        if (!adapter.waitFor(ADAPTER_KILL_WAIT_SECONDS, TimeUnit.SECONDS)) {
+        if (!adapter.waitFor(AdapterProcess.KILL_WAIT_SECONDS, TimeUnit.SECONDS)) {
           adapter.destroyForcibly();
         }
       } catch (InterruptedException e) {

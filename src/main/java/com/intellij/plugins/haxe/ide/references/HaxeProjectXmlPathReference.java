@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.ide.references;
 
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeProjectXmlFiles;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildFileIncludes;
 import com.intellij.psi.PsiElement;
@@ -18,7 +19,6 @@ import org.jetbrains.annotations.Nullable;
 /// inside it ([HaxeBuildFileIncludes#includeFile]). Soft: a path naming
 /// nothing is left alone.
 final class HaxeProjectXmlPathReference extends PsiReferenceBase<XmlAttributeValue> {
-  private static final String INCLUDE_TAG = "include";
 
   private final String path;
 
@@ -54,7 +54,7 @@ final class HaxeProjectXmlPathReference extends PsiReferenceBase<XmlAttributeVal
 
   private boolean isInclude() {
     XmlTag tag = PsiTreeUtil.getParentOfType(getElement(), XmlTag.class);
-    return tag != null && INCLUDE_TAG.equalsIgnoreCase(tag.getLocalName());
+    return tag != null && ProjectXmlVocabulary.INCLUDE_ELEMENT.equalsIgnoreCase(tag.getLocalName());
   }
 
   /** Whether the path names a folder whose include file is the target. */
