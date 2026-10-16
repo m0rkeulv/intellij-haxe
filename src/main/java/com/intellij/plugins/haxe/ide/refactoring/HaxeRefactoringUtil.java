@@ -19,13 +19,13 @@
 package com.intellij.plugins.haxe.ide.refactoring;
 
 import com.intellij.codeInsight.PsiEquivalenceUtil;
-import com.intellij.plugins.haxe.lang.psi.fakes.HaxeSyntheticDeclarations;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.plugins.haxe.lang.lexer.HaxeTokenTypeSets;
 import com.intellij.plugins.haxe.lang.psi.*;
+import com.intellij.plugins.haxe.lang.psi.fakes.HaxeSyntheticDeclarations;
 import com.intellij.plugins.haxe.lang.psi.impl.ComponentNameScopeProcessor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;

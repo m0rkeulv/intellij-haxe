@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.lang.psi.stubs.serializers;
 
-import com.intellij.plugins.haxe.lang.psi.stubs.index.specialized.HaxeImportHxStubIndex;
 import com.intellij.plugins.haxe.lang.psi.HaxeFile;
+import com.intellij.plugins.haxe.lang.psi.stubs.index.specialized.HaxeImportHxStubIndex;
 import com.intellij.plugins.haxe.lang.psi.stubs.stub.HaxeFileStub;
 import com.intellij.psi.stubs.IndexSink;
 import com.intellij.psi.stubs.StubElement;

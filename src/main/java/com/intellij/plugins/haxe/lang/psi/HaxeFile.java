@@ -21,12 +21,12 @@
 package com.intellij.plugins.haxe.lang.psi;
 
 import com.intellij.extapi.psi.PsiFileBase;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.roots.PackageIndex;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.roots.PackageIndex;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.ide.hierarchy.HaxeHierarchyUtils;

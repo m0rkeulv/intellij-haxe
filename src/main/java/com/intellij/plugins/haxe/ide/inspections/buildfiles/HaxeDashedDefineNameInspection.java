@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.ide.inspections.buildfiles;
 
 import com.intellij.codeInspection.LocalInspectionTool;
-import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.modcommand.ModPsiUpdater;
 import com.intellij.modcommand.PsiUpdateModCommandQuickFix;
@@ -9,6 +8,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLLanguage;
 import com.intellij.plugins.haxe.buildsystem.hxml.psi.HXMLFile;
 import com.intellij.plugins.haxe.hxml.psi.HXMLDefine;

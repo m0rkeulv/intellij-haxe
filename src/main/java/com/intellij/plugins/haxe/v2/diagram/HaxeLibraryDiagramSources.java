@@ -1,9 +1,9 @@
 package com.intellij.plugins.haxe.v2.diagram;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlIncludeTree;

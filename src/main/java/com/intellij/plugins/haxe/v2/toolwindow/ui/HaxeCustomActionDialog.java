@@ -15,10 +15,10 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.A
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
-import com.intellij.plugins.haxe.v2.toolwindow.HaxeDetectedTools;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeDetectedTools;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;

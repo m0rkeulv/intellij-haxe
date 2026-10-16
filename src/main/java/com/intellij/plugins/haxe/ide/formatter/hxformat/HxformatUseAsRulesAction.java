@@ -1,13 +1,13 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.ToggleAction;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

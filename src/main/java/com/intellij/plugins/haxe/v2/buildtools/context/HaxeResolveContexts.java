@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.context;
 
 import com.intellij.openapi.Disposable;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -11,6 +10,7 @@ import com.intellij.openapi.roots.OrderEntry;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;

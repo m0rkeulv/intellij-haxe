@@ -1,16 +1,14 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
 import com.intellij.openapi.module.Module;
-import java.util.HashSet;
-import java.io.IOException;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.util.io.FileUtilRt;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
 import com.intellij.plugins.haxe.buildsystem.hxp.HxpFileType;
 import com.intellij.plugins.haxe.buildsystem.lime.LimeProjectShape;
@@ -23,8 +21,10 @@ import com.intellij.psi.PsiManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;

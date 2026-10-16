@@ -1,9 +1,9 @@
 package com.intellij.plugins.haxe.ide.formatter.hxformat;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeStyleBundle;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolConfigs;
 import com.jetbrains.jsonSchema.extension.JsonSchemaFileProvider;
 import com.jetbrains.jsonSchema.extension.JsonSchemaProviderFactory;
 import com.jetbrains.jsonSchema.extension.SchemaType;

@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.runner.debugger.hashlink;
 
-import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.ColoredProcessHandler;
 import com.intellij.execution.ui.RunnerLayoutUi;
@@ -15,6 +14,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.StackFrame;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequest;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.LaunchRequestArguments;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.ui.content.Content;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.stepping.XSmartStepIntoHandler;

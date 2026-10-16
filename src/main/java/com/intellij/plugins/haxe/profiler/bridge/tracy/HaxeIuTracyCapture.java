@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.profiler.bridge.tracy;
 
 import com.intellij.execution.Executor;
-import com.intellij.util.net.NetUtils;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -20,6 +19,7 @@ import com.intellij.plugins.haxe.profiler.tracy.TracySession;
 import com.intellij.plugins.haxe.profiler.tracy.TracySourceLocation;
 import com.intellij.plugins.haxe.profiler.tracy.connect.*;
 import com.intellij.plugins.haxe.profiler.tracy.wire.TracyProtocolVersion;
+import com.intellij.util.net.NetUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

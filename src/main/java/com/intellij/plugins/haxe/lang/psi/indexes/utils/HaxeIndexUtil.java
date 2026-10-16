@@ -19,12 +19,11 @@
 package com.intellij.plugins.haxe.lang.psi.indexes.utils;
 
 import com.intellij.openapi.diagnostic.LogLevel;
-import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-
 import com.intellij.plugins.haxe.model.HaxeProjectModel;
 import com.intellij.plugins.haxe.util.HaxeDebugUtil;
+import com.intellij.plugins.haxe.util.HaxeModuleVariants;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.stubs.StubBase;
 import lombok.CustomLog;

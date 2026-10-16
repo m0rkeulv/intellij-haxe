@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.dap.ide;
 
 import com.intellij.execution.ExecutionException;
-import com.intellij.util.net.NetUtils;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.configurations.RunProfile;
@@ -13,6 +12,7 @@ import com.intellij.execution.process.ProcessTerminatedListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.GenericProgramRunner;
 import com.intellij.execution.ui.RunContentDescriptor;
+import com.intellij.util.net.NetUtils;
 import com.intellij.xdebugger.XDebugProcess;
 import com.intellij.xdebugger.XDebugProcessStarter;
 import com.intellij.xdebugger.XDebugSession;

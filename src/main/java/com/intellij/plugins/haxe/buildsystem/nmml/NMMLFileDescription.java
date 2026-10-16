@@ -1,12 +1,12 @@
 package com.intellij.plugins.haxe.buildsystem.nmml;
 
 import com.intellij.openapi.module.Module;
-import com.intellij.psi.xml.XmlTag;
 import com.intellij.openapi.util.Iconable;
 import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.psi.xml.XmlDocument;
 import com.intellij.psi.xml.XmlFile;
+import com.intellij.psi.xml.XmlTag;
 import com.intellij.util.xml.DomFileDescription;
 import icons.HaxeIcons;
 import org.jetbrains.annotations.NotNull;

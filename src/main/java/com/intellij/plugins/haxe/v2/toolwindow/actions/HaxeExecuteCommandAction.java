@@ -1,5 +1,7 @@
 package com.intellij.plugins.haxe.v2.toolwindow.actions;
 
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import icons.HaxeIcons;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.util.PropertiesComponent;
@@ -10,9 +12,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeConsoleCommandRunner;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;

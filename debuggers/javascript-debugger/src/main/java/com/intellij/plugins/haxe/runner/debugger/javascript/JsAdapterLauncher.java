@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.runner.debugger.javascript;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.util.net.NetUtils;
+
 import java.io.IOException;
 import java.nio.file.Path;
 

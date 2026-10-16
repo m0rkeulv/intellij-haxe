@@ -1,7 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.plugins.haxe.display.protocol.MissingFields;
 import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
+import com.intellij.plugins.haxe.display.protocol.MissingFields;
 import com.intellij.plugins.haxe.ide.generation.HaxeMemberStubs;
 import com.intellij.plugins.haxe.model.HaxeAccessorType;
 import org.jetbrains.annotations.NotNull;

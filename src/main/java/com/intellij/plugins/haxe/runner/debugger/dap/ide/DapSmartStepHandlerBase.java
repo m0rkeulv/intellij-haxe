@@ -12,8 +12,8 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
 
-import javax.swing.Icon;
 import java.util.List;
+import javax.swing.Icon;
 
 /**
  * The shared half of the two smart-step flavours: the async entry point the

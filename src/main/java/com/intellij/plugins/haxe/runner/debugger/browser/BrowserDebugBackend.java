@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
@@ -9,6 +8,7 @@ import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapBackend;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapDebugProcess;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.Request;
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.requests.*;
+import com.intellij.plugins.haxe.runner.debugger.dap.transport.AdapterProcess;
 import com.intellij.util.net.NetUtils;
 import java.io.BufferedReader;
 import java.io.File;

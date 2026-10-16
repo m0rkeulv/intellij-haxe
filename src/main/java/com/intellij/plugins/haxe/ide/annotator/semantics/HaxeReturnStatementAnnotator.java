@@ -1,7 +1,5 @@
 package com.intellij.plugins.haxe.ide.annotator.semantics;
 
-import com.intellij.plugins.haxe.model.fixer.HaxeTypeTagChangeFixer;
-import com.intellij.plugins.haxe.util.HaxePresentableUtil;
 import com.intellij.lang.annotation.AnnotationHolder;
 import com.intellij.lang.annotation.Annotator;
 import com.intellij.lang.annotation.HighlightSeverity;
@@ -14,7 +12,9 @@ import com.intellij.plugins.haxe.model.evaluator.HaxeExpressionEvaluator;
 import com.intellij.plugins.haxe.model.evaluator.assign.AssignExplanation;
 import com.intellij.plugins.haxe.model.evaluator.assign.HaxeAssignEvaluation;
 import com.intellij.plugins.haxe.model.fixer.HaxeFixer;
+import com.intellij.plugins.haxe.model.fixer.HaxeTypeTagChangeFixer;
 import com.intellij.plugins.haxe.model.type.*;
+import com.intellij.plugins.haxe.util.HaxePresentableUtil;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;

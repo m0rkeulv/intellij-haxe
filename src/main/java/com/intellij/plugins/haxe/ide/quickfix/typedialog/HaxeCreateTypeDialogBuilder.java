@@ -1,9 +1,9 @@
 package com.intellij.plugins.haxe.ide.quickfix.typedialog;
 
 import com.intellij.ide.actions.ElementCreator;
-import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.ide.actions.newclass.CreateWithTemplatesDialogPanel;
 import com.intellij.ide.ui.newItemPopup.NewItemPopupUtil;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.CommandProcessor;

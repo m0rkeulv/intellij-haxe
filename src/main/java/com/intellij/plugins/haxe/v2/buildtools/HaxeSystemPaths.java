@@ -1,15 +1,15 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.openapi.application.PathManager;
-import java.util.Map;
-import java.nio.file.Files;
-import java.io.IOException;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Map;
 
 /**
  * Content-addressed directories for generated/extracted files under the IDE

@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
 import com.intellij.plugins.haxe.v2.buildtools.LimeProjects;
-import java.util.concurrent.ConcurrentHashMap;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.execution.ExecutionException;
@@ -37,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.intellij.plugins.haxe.v2.buildtools.info.HaxeProjectInfoCache.firstErrorLine;
 

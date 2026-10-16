@@ -1,13 +1,13 @@
 package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
-import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.buildtools.settings.DefineEffect;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.haxelib.HaxelibGitSpec;
 import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import org.jetbrains.annotations.NotNull;
