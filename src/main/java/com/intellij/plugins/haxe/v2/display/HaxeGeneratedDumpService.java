@@ -24,7 +24,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -59,7 +58,6 @@ public final class HaxeGeneratedDumpService {
   record DumpBuild(@NotNull List<String> args, @NotNull HaxeTarget target) {
   }
 
-  private static final Set<String> MAIN_FLAGS = Set.of("-main", "--main", "-m");
   private static final int WINDOWS_MAX_PATH = 260;
   /** Room reserved below the dump root for {@code dump/<target>/<package path>/<Module>.dump}. */
   private static final int DUMP_TREE_HEADROOM = 120;
@@ -151,7 +149,7 @@ public final class HaxeGeneratedDumpService {
   @Nullable
   private static Path prepareHlScratchDir(@NotNull DumpBuild dumpBuild) {
     if (dumpBuild.target() != HaxeTarget.HL) return null;
-    Path cwd = cwdOf(dumpBuild.args());
+    Path cwd = HxmlArguments.workDirectory(dumpBuild.args());
     if (cwd == null) return null;
     Path scratch = cwd.resolve("dump");
     if (Files.isDirectory(scratch)) return null;
@@ -173,14 +171,6 @@ public final class HaxeGeneratedDumpService {
     } catch (IOException e) {
       log.info("cannot clean hl dump scratch dir " + scratch + ": " + e.getMessage());
     }
-  }
-
-  @Nullable
-  private static Path cwdOf(@NotNull List<String> args) {
-    for (int i = 0; i < args.size() - 1; i++) {
-      if (args.get(i).equals("--cwd")) return Path.of(args.get(i + 1));
-    }
-    return null;
   }
 
   /**
@@ -238,16 +228,16 @@ public final class HaxeGeneratedDumpService {
     String mainClass = null;
     for (int i = 0; i < buildArgs.size(); i++) {
       String arg = buildArgs.get(i);
-      if (arg.equals("-x") || arg.equals("--run")) return null;
-      if (arg.equals("-cmd") || arg.equals("--cmd")) {
+      if (HxmlFileParser.isRunFlag(arg)) return null;
+      if (HxmlFileParser.COMMAND_FLAGS.contains(arg)) {
         i++;
         continue;
       }
       // lime's display hxml ends with --no-output (it exists for IDE
       // completion), but without a generation pass there are no dumps; the
       // output is redirected into the dump root anyway
-      if (arg.equals("--no-output")) continue;
-      if (MAIN_FLAGS.contains(arg) && i + 1 < buildArgs.size()) {
+      if (arg.equals(HxmlFileParser.NO_OUTPUT_FLAG)) continue;
+      if (HxmlFileParser.isMainFlag(arg) && i + 1 < buildArgs.size()) {
         mainClass = buildArgs.get(i + 1);
         i++;
         continue;

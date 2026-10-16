@@ -1,6 +1,9 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.openapi.Disposable;
+import java.nio.file.Path;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
+import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
@@ -218,7 +221,7 @@ public final class HaxeCompilerInlayService implements Disposable {
     Connected connected = displayService.connectFor(context, DisplayMethods.COMPILED_TYPES);
     if (connected == null) return false;
     List<String> args = new ArrayList<>(connected.args());
-    args.add("--no-output");
+    args.add(HxmlFileParser.NO_OUTPUT_FLAG);
     long started = System.currentTimeMillis();
     try {
       List<TypeBlueprint> types = connected.client().compiledTypes(args, HaxeCompilerDisplayService.CONTEXT_COMPILE_TIMEOUT_MS);
@@ -242,12 +245,11 @@ public final class HaxeCompilerInlayService implements Disposable {
     return HaxeCompilerDisplayService.getInstance(project).buildInputsStamp();
   }
 
-  /** The directory the compile runs in (the value after {@code --cwd}), which relative file positions are from; the project directory without one. */
+  /** The directory the compile runs in (every {@code --cwd} composed), which relative file positions are from; the project directory without one. */
   @NotNull
   private String workDirectoryOf(@NotNull List<String> args) {
-    int at = args.indexOf("--cwd");
-    if (at >= 0 && at + 1 < args.size()) return args.get(at + 1);
-    return StringUtil.notNullize(project.getBasePath());
+    Path workDirectory = HxmlArguments.workDirectory(args);
+    return workDirectory != null ? workDirectory.toString() : StringUtil.notNullize(project.getBasePath());
   }
 
   @Nullable

@@ -4,13 +4,13 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
+import com.intellij.plugins.haxe.v2.buildsystem.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /// Facts about plain hxml builds: the direct `haxe <file>` compile, its
 /// default action and, for a C++ build, hxcpp's clean. The lime counterpart is
@@ -77,11 +77,35 @@ public final class HxmlProjects {
     int fileArgumentIndex = command.indexOf(HaxeBuildWorkDirectories.fileArgument(project, file));
     if (fileArgumentIndex < 0) return command;
     List<String> sectionArguments = HaxeBuildSections.selectedSectionArguments(project, file);
-    if (sectionArguments == null) return command;
+    return sectionArguments == null ? command : splice(command, fileArgumentIndex, sectionArguments);
+  }
 
-    List<String> scoped = new ArrayList<>(command.subList(0, fileArgumentIndex));
-    scoped.addAll(sectionArguments);
-    scoped.addAll(command.subList(fileArgumentIndex + 1, command.size()));
-    return scoped;
+  /**
+   * The command with its file argument replaced by the SELECTED section's
+   * lines as compiler arguments whatever the section count (a single-section
+   * file inlines its whole content), the lines passed through
+   * {@code transform} first. Null when the command carries no file argument or
+   * the section cannot be read. Call in a read action.
+   */
+  @Nullable
+  public static List<String> spliceSelectedSection(@NotNull Project project,
+                                                   @NotNull VirtualFile file,
+                                                   @NotNull List<String> command,
+                                                   @NotNull UnaryOperator<List<String>> transform) {
+    int fileArgumentIndex = command.indexOf(HaxeBuildWorkDirectories.fileArgument(project, file));
+    if (fileArgumentIndex < 0) return null;
+    String section = HaxeBuildSections.selectedSectionContent(project, new HaxeBuildFile(file, HaxeBuildFileType.HXML));
+    if (section == null) return null;
+    List<String> sectionArguments = transform.apply(HxmlArguments.parseLines(section.lines().toList()));
+    return splice(command, fileArgumentIndex, sectionArguments);
+  }
+
+  /** The command with the file argument at {@code fileArgumentIndex} replaced by the section's arguments. */
+  @NotNull
+  private static List<String> splice(@NotNull List<String> command, int fileArgumentIndex, @NotNull List<String> sectionArguments) {
+    List<String> spliced = new ArrayList<>(command.subList(0, fileArgumentIndex));
+    spliced.addAll(sectionArguments);
+    spliced.addAll(command.subList(fileArgumentIndex + 1, command.size()));
+    return spliced;
   }
 }

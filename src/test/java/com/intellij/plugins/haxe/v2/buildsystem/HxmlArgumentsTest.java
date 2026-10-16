@@ -86,6 +86,17 @@ public class HxmlArgumentsTest {
   }
 
   @Test
+  @DisplayName("the work directory composes every cwd in order")
+  public void testTheWorkDirectoryComposesEveryCwdInOrder() {
+    Path root = Path.of("/work/project");
+
+    Path composed = HxmlArguments.workDirectory(List.of("--cwd", root.toString(), "-cp", "src", "--cwd", "sub"));
+
+    assertEquals(root.resolve("sub"), composed);
+    assertEquals(null, HxmlArguments.workDirectory(List.of("-cp", "src")));
+  }
+
+  @Test
   @DisplayName("unreadable hxml reference is kept as-is")
   public void testUnreadableHxmlReferenceIsKeptAsIs() {
     List<String> expanded = HxmlArguments.expandReferences(List.of("missing.hxml", "-main", "Main"));

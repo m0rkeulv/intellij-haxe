@@ -38,8 +38,6 @@ public final class HxcppExecutables {
     "android", "iphoneos", "iphonesim", "appletvos", "appletvsim", "watchos", "watchsimulator",
     "emscripten", "tizen", "blackberry", "webos", "gph", "gcw0", "winrt");
   private static final Set<String> SHARED_LIBRARY_DEFINES = Set.of("dll_import", "dll_link");
-  private static final Set<String> DEBUG_FLAGS = Set.of("-debug", "--debug");
-  private static final Set<String> DEFINE_FLAGS = Set.of("-D", "--define");
   private static final String DEFAULT_OUTPUT_NAME = "output";
   private static final String DEFAULT_DEBUG_SUFFIX = "-debug";
 
@@ -72,10 +70,10 @@ public final class HxcppExecutables {
     List<HaxeDefine> defines = new ArrayList<>();
     for (int i = 0; i < arguments.size(); i++) {
       String argument = arguments.get(i);
-      if (DEBUG_FLAGS.contains(argument)) {
-        defines.add(new HaxeDefine("debug", null));
+      if (HxmlFileParser.DEBUG_FLAGS.contains(argument)) {
+        defines.add(new HaxeDefine(HxmlFileParser.DEBUG_DEFINE_NAME, null));
       }
-      else if (DEFINE_FLAGS.contains(argument) && i + 1 < arguments.size()) {
+      else if (HxmlFileParser.DEFINE_FLAGS.contains(argument) && i + 1 < arguments.size()) {
         defines.add(define(arguments.get(++i)));
       }
     }
