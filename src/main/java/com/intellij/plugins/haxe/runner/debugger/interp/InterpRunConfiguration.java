@@ -20,6 +20,7 @@ import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapCommandLineRunningState;
 import com.intellij.plugins.haxe.runner.debugger.dap.ide.DapRunConfigurationBase;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchScopes;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -90,6 +91,7 @@ public class InterpRunConfiguration extends DapRunConfigurationBase {
 
   @Override
   public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
+    HaxeProjectTrust.requireTrustForRun(getProject());
     requireModule();
     return new DapCommandLineRunningState(env, () -> createCommandLine(List.of()));
   }

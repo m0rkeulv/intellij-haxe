@@ -73,6 +73,11 @@ public class HaxeDisplayClient {
     this.observer = observer;
   }
 
+  /** Whether the channel behind this client is closed for good; further requests fail without reaching a server. */
+  public boolean isChannelBroken() {
+    return channel.isBroken();
+  }
+
   // --- lifecycle / capability ---
 
   public InitializeResult initialize(List<String> baseArgs) throws DisplayRequestException {
@@ -99,7 +104,12 @@ public class HaxeDisplayClient {
    * about it.
    */
   public List<FileDiagnostics> projectDiagnostics(List<String> baseArgs) throws DisplayRequestException {
-    return DisplayJson.decodeDiagnostics(call(baseArgs, DisplayMethods.DIAGNOSTICS, Map.of()));
+    return projectDiagnostics(baseArgs, readTimeoutMs);
+  }
+
+  /** Like {@link #projectDiagnostics(List)} with its own read timeout: type-checking a whole context on a cold server takes longer than one display answer. */
+  public List<FileDiagnostics> projectDiagnostics(List<String> baseArgs, int timeoutMs) throws DisplayRequestException {
+    return DisplayJson.decodeDiagnostics(call(baseArgs, DisplayMethods.DIAGNOSTICS, Map.of(), timeoutMs));
   }
 
   public HoverInfo hover(List<String> baseArgs, String file, int offset, String contents)
@@ -190,7 +200,12 @@ public class HaxeDisplayClient {
    * so it reads the files on disk; pass {@code --no-output} in the arguments.
    */
   public List<TypeBlueprint> compiledTypes(List<String> baseArgs) throws DisplayRequestException {
-    return DisplayJson.decodeCompiledTypes(call(baseArgs, DisplayMethods.COMPILED_TYPES, Map.of()));
+    return compiledTypes(baseArgs, readTimeoutMs);
+  }
+
+  /** Like {@link #compiledTypes(List)} with its own read timeout; it is a whole compile, see {@link #projectDiagnostics(List, int)}. */
+  public List<TypeBlueprint> compiledTypes(List<String> baseArgs, int timeoutMs) throws DisplayRequestException {
+    return DisplayJson.decodeCompiledTypes(call(baseArgs, DisplayMethods.COMPILED_TYPES, Map.of(), timeoutMs));
   }
 
   public void invalidate(List<String> baseArgs, String file) throws DisplayRequestException {
@@ -212,14 +227,19 @@ public class HaxeDisplayClient {
   /** Sends one display request and returns its result data. The observer hears of failed requests too. */
   private JsonNode call(List<String> baseArgs, String method, Map<String, Object> params)
     throws DisplayRequestException {
+    return call(baseArgs, method, params, readTimeoutMs);
+  }
+
+  private JsonNode call(List<String> baseArgs, String method, Map<String, Object> params, int timeoutMs)
+    throws DisplayRequestException {
     List<String> args = new ArrayList<>(baseArgs);
     args.add("--display");
     args.add(DisplayJson.encodeRequest(method, params));
-    return observed(method, () -> sendDisplayRequest(args, method));
+    return observed(method, () -> sendDisplayRequest(args, method, timeoutMs));
   }
 
-  private JsonNode sendDisplayRequest(List<String> args, String method) throws DisplayRequestException {
-    DisplayResponse response = channel.request(args, readTimeoutMs);
+  private JsonNode sendDisplayRequest(List<String> args, String method, int timeoutMs) throws DisplayRequestException {
+    DisplayResponse response = channel.request(args, timeoutMs);
     if (response.payload().isEmpty()) {
       throw new DisplayRequestException("Display request '" + method + "' got no result: " + failureDetail(response), response.hasError());
     }

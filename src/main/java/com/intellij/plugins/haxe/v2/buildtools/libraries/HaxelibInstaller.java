@@ -1,6 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.CapturingProcessHandler;
@@ -13,6 +13,7 @@ import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -129,12 +130,12 @@ public final class HaxelibInstaller {
     }
   }
 
+  /** Installs are project-wide: the project node's haxelib, run from the project directory. */
   @NotNull
   private static GeneralCommandLine haxelibCommand(@NotNull Project project, @NotNull List<String> parameters) {
-    return new GeneralCommandLine()
-      .withExePath(HaxeToolPathResolver.resolveHaxelibExecutable(project))
-      .withParameters(parameters)
-      .withWorkDirectory(project.getBasePath());
+    String basePath = project.getBasePath();
+    Path workDirectory = basePath == null ? null : Path.of(basePath);
+    return HaxelibCommands.commandLine(project, HaxeContainers.projectNodeContainerId(project), workDirectory, parameters);
   }
 
   // "haxelib install name [version] --always"; git/path pseudo-versions cannot be passed to install

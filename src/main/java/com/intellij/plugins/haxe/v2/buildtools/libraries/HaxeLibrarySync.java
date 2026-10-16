@@ -15,16 +15,17 @@ import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.LibraryOrderEntry;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.OrderEntry;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.haxelib.HaxelibCommandUtils;
-import com.intellij.plugins.haxe.haxelib.HaxelibSemVer;
+import com.intellij.plugins.haxe.haxelib.*;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxelibPathParser.LibrarySection;
+import com.intellij.plugins.haxe.v2.migration.HaxeV1Migrator;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
@@ -165,19 +166,44 @@ public final class HaxeLibrarySync {
   static Map<Module, List<HaxeLibDependency>> collectDependencies(@NotNull Project project) {
     Map<Module, List<HaxeLibDependency>> dependencies = new LinkedHashMap<>();
     for (Module module : ModuleManager.getInstance(project).getModules()) {
-      List<HaxeBuildFile> buildFiles = HaxeKnownBuildFiles.forModule(project, module);
-      List<HaxeBuildFile> sources = dependencySources(project, module, buildFiles);
-
-      List<HaxeLibDependency> moduleDependencies = new ArrayList<>();
-      for (HaxeBuildFile buildFile : sources) {
-        for (HaxeLibDependency dependency : effectiveLibraries(project, buildFile)) {
-          addIfNameAbsent(moduleDependencies, dependency);
-        }
-      }
-      addHxpToolchainLibraries(buildFiles, moduleDependencies);
+      List<HaxeLibDependency> moduleDependencies = legacyEngineOwns(project, module) ? List.of() : moduleDependencies(project, module);
       dependencies.put(module, moduleDependencies);
     }
     return dependencies;
+  }
+
+  @NotNull
+  private static List<HaxeLibDependency> moduleDependencies(@NotNull Project project, @NotNull Module module) {
+    List<HaxeBuildFile> buildFiles = HaxeKnownBuildFiles.forModule(project, module);
+    List<HaxeBuildFile> sources = dependencySources(project, module, buildFiles);
+    List<HaxeLibDependency> moduleDependencies = new ArrayList<>();
+    for (HaxeBuildFile buildFile : sources) {
+      for (HaxeLibDependency dependency : effectiveLibraries(project, buildFile)) {
+        addIfNameAbsent(moduleDependencies, dependency);
+      }
+    }
+    addHxpToolchainLibraries(buildFiles, moduleDependencies);
+    return moduleDependencies;
+  }
+
+  /**
+   * Whether the legacy (V1) library engine equips the module: a V1-type module
+   * in a project the legacy updater tracks, or one already carrying the
+   * engine's "Haxelib: " entries. The sync then attaches nothing of its own
+   * (and drops what it attached earlier), so no dependency appears twice;
+   * the module gets the sync's libraries once it is converted.
+   */
+  private static boolean legacyEngineOwns(@NotNull Project project, @NotNull Module module) {
+    if (!HaxeV1Migrator.isLegacy(module)) return false;
+    if (HaxelibProjectUpdater.tracksProject(project)) return true;
+    for (OrderEntry entry : ModuleRootManager.getInstance(module).getOrderEntries()) {
+      if (entry instanceof LibraryOrderEntry library && isLegacyManaged(library.getLibraryName())) return true;
+    }
+    return false;
+  }
+
+  private static boolean isLegacyManaged(@Nullable String libraryName) {
+    return libraryName != null && HaxelibNameUtil.isManagedLibrary(libraryName);
   }
 
   /**
@@ -275,16 +301,16 @@ public final class HaxeLibrarySync {
                                               @NotNull Module module,
                                               @NotNull List<HaxeLibDependency> dependencies,
                                               @NotNull ProgressIndicator indicator) {
-    VirtualFile workDir = ProjectUtil.guessProjectDir(project);
     Sdk sdk = HaxeToolPathResolver.resolveSdk(project, module.getName());
+    Path workDirectory = haxelibWorkDirectory(project, module);
     Map<String, List<String>> libraries = new LinkedHashMap<>();
     Map<String, Map<String, String>> definesByDependency = new LinkedHashMap<>();
     Map<String, Library> resolvedLibraries = new LinkedHashMap<>();
     Map<String, List<String>> closureByDependency = new LinkedHashMap<>();
-    if (sdk != null && workDir != null) {
+    if (sdk != null && workDirectory != null) {
       for (HaxeLibDependency dependency : dependencies) {
         indicator.setText2(dependency.name());
-        List<String> output = haxelibPathOutput(sdk, workDir, dependency);
+        List<String> output = haxelibPathOutput(project, module, workDirectory, dependency);
         Map<String, String> defines = new LinkedHashMap<>();
         List<String> closure = new ArrayList<>();
         // one External Libraries entry PER library in the output (see HaxelibPathParser.parseSections)
@@ -352,15 +378,28 @@ public final class HaxeLibrarySync {
     return union;
   }
 
+  /**
+   * Where the module's haxelib runs: the container root, so haxelib picks up
+   * the module-local {@code .haxelib} repository the build compiles against;
+   * null when neither the module nor the project has a directory.
+   * TODO: a build file with its own work directory (and a .haxelib there) still resolves from the container root
+   */
+  @Nullable
+  private static Path haxelibWorkDirectory(@NotNull Project project, @NotNull Module module) {
+    String root = HaxeContainers.containerRootPath(project, module.getName());
+    return root == null ? null : Path.of(root);
+  }
+
   @NotNull
-  private static List<String> haxelibPathOutput(@NotNull Sdk sdk,
-                                                @NotNull VirtualFile workDir,
+  private static List<String> haxelibPathOutput(@NotNull Project project,
+                                                @NotNull Module module,
+                                                @NotNull Path workDirectory,
                                                 @NotNull HaxeLibDependency dependency) {
     String spec = dependency.name();
     // a release version can be passed to `haxelib path`; git/path specs cannot
     if (HaxelibSemVer.isReleaseVersion(dependency.version())) {
       spec += ":" + dependency.version();
     }
-    return HaxelibCommandUtils.issueHaxelibCommand(sdk, workDir, "path", spec);
+    return HaxelibCommands.output(project, module.getName(), workDirectory, List.of("path", spec));
   }
 }

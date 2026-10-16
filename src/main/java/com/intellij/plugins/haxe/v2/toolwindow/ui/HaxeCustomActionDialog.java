@@ -4,19 +4,18 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.util.ui.HaxeDialogHints;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCustomCommands;
+import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.RunBeforeRefusal;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.CustomAction;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSystem;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeActionReferences;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeKnownBuildFiles;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.Launch;
+import com.intellij.plugins.haxe.v2.toolwindow.HaxeDetectedTools;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind.Parameter;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
@@ -54,7 +53,8 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
   private static final int HINT_WIDTH = 400;
 
   private final String nameRequiredKey;
-  /** The names the edited action may not take; see {@link #takenNames}. */
+  private final String nameTakenKey;
+  /** The names the edited action or tool may not take; see {@link #takenNames(Project, HaxeBuildFile, String)} and {@link #takenToolNames}. */
   private final Set<String> takenNames;
   /** The launch section of a build file's action; null for a tool. */
   private final HaxeLaunchSection launchSection;
@@ -71,11 +71,12 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
 
   private HaxeCustomActionDialog(@NotNull Project project, @Nullable EditedCommand initial, boolean adding,
                                  @NotNull String addTitleKey, @NotNull String editTitleKey,
-                                 @Nullable String hintKey, @NotNull String nameRequiredKey,
+                                 @Nullable String hintKey, @NotNull String nameRequiredKey, @NotNull String nameTakenKey,
                                  @NotNull Set<String> takenNames, @Nullable HaxeLaunchSection launchSection,
                                  @Nullable HaxeRunBeforeSection runBeforeSection) {
     super(project);
     this.nameRequiredKey = nameRequiredKey;
+    this.nameTakenKey = nameTakenKey;
     this.takenNames = takenNames;
     this.launchSection = launchSection;
     this.runBeforeSection = runBeforeSection;
@@ -154,8 +155,8 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
                                                                      runBefore);
     return new HaxeCustomActionDialog(project, edited, adding,
                                       "haxe.custom.action.dialog.add.title", "haxe.custom.action.dialog.edit.title",
-                                      null, "haxe.custom.action.dialog.name.required", takenNames, launchSection,
-                                      runBeforeSection);
+                                      null, "haxe.custom.action.dialog.name.required", "haxe.custom.action.dialog.name.taken",
+                                      takenNames, launchSection, runBeforeSection);
   }
 
   /**
@@ -224,13 +225,30 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     return Set.copyOf(taken);
   }
 
-  /** A container's custom tool: no target placeholders, defaults to the container root, no launch. */
+  /** A container's custom tool: no target placeholders, defaults to the container root, no launch; the container's other tool names are taken. */
   @NotNull
-  public static HaxeCustomActionDialog forTool(@NotNull Project project, @Nullable EditedCommand initial) {
+  public static HaxeCustomActionDialog forTool(@NotNull Project project, @NotNull String containerId, @Nullable EditedCommand initial) {
+    Set<String> takenNames = takenToolNames(project, containerId, initial == null ? null : initial.name());
     return new HaxeCustomActionDialog(project, initial, initial == null,
                                       "haxe.custom.tool.dialog.add.title", "haxe.custom.tool.dialog.edit.title",
                                       "haxe.custom.tool.dialog.hint", "haxe.custom.tool.dialog.name.required",
-                                      Set.of(), null, null);
+                                      "haxe.custom.tool.dialog.name.taken", takenNames, null, null);
+  }
+
+  /**
+   * The names of the container's detected tools (fixed rows) and of its other
+   * custom tools (the store keeps one tool per name); {@code editedName} is
+   * the edited tool's current name, still free to keep.
+   */
+  @NotNull
+  private static Set<String> takenToolNames(@NotNull Project project, @NotNull String containerId, @Nullable String editedName) {
+    Set<String> taken = new HashSet<>();
+    VirtualFile rootDir = HaxeContainers.containerRootDir(project, containerId);
+    if (rootDir != null) taken.addAll(HaxeDetectedTools.namesIn(rootDir));
+    for (HaxeCustomToolsStore.CustomTool tool : HaxeCustomToolsStore.getInstance(project).getTools(containerId)) {
+      if (!tool.name().equals(editedName)) taken.add(tool.name());
+    }
+    return Set.copyOf(taken);
   }
 
   @NotNull
@@ -266,7 +284,7 @@ public final class HaxeCustomActionDialog extends DialogWrapper {
     }
     String name = nameField.getText().trim();
     if (takenNames.contains(name)) {
-      return new ValidationInfo(HaxeBundle.message("haxe.custom.action.dialog.name.taken", name), nameField);
+      return new ValidationInfo(HaxeBundle.message(nameTakenKey, name), nameField);
     }
     // a bare trigger of an existing configuration and a chain of other actions need no command of their own
     boolean triggersExisting = launchSection != null && launchSection.launch() instanceof Launch.Existing;

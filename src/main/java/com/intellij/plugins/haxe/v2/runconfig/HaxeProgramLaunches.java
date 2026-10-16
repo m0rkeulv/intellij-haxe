@@ -253,10 +253,10 @@ public final class HaxeProgramLaunches {
       parameters.put(Parameter.HL_FILE, output.toString());
       return;
     }
-    // the HL output path points at a file INSIDE obj - its parent is the obj dir
-    Path binDir = binDirBesideObj(output.getParent());
+    Path beside = LimeProjects.binDirBesideObj(output);
+    Path binDir = beside != null ? beside : output.getParent();
     if (binDir == null) return;
-    parameters.put(Parameter.HL_FILE, binDir.resolve("hlboot.dat").toString());
+    parameters.put(Parameter.HL_FILE, binDir.resolve(LimeProjects.HL_BOOT_FILE).toString());
     String appFile = appFileName(buildFile);
     if (appFile != null) {
       parameters.put(Parameter.HL_BINARY, binDir.resolve(HaxeSdkUtilBase.getExecutableName(appFile)).toString());
@@ -319,23 +319,33 @@ public final class HaxeProgramLaunches {
       return;
     }
     Path output = HaxeBuildWorkDirectories.resolve(project, buildFile.file(), targetOutput);
-    if ("obj".equals(String.valueOf(output.getFileName()))) {
-      // the CPP output path IS the obj dir; the executable sits in bin beside it
-      Path binDir = binDirBesideObj(output);
-      String appFile = appFileName(buildFile);
-      if (binDir == null || appFile == null) return;
-      output = binDir.resolve(HaxeSdkUtilBase.getExecutableName(appFile));
-    }
-    parameters.put(Parameter.EXECUTABLE, output.toString());
+    Path launcher = packagedLauncher(project, buildFile, output);
+    if (launcher != null) parameters.put(Parameter.EXECUTABLE, launcher.toString());
+  }
+
+  /**
+   * The launcher an evaluated output stands for: the output itself when the
+   * evaluation names the launcher (every nmml output, lime's desktop and neko
+   * outputs); for an output under obj (lime's HL bytecode, or the obj
+   * directory itself) the launcher in bin beside it, per
+   * {@link LimeProjects#packagedBinary(Path, String, String)}. Null for an
+   * obj output whose launcher cannot be named (an hxp, an undeclared app
+   * file): the visible configuration then prompts for the executable.
+   */
+  @Nullable
+  private static Path packagedLauncher(@NotNull Project project, @NotNull HaxeBuildFile buildFile, @NotNull Path output) {
+    if (LimeProjects.binDirBesideObj(output) == null) return output;
+    String appFile = appFileName(buildFile);
+    String targetFlag = selectedTargetFlag(project, buildFile);
+    if (appFile == null || targetFlag == null) return null;
+    return LimeProjects.packagedBinary(output, targetFlag, appFile);
   }
 
   /**
    * hxml: the neko runtime executes the {@code .n} bytecode (the configured
    * Build Tools neko, else the bare name from PATH). lime and nme both wrap
-   * the bytecode in a launcher executable, which runs directly - lime's
-   * target output points inside obj with the launcher in bin beside it
-   * (same layout the hxcpp and HL configs navigate); nme's target output IS
-   * the launcher.
+   * the bytecode in a launcher executable, which runs directly; both
+   * evaluations name the launcher (see {@link #packagedLauncher}).
    */
   private static void nekoDefaults(@NotNull Project project,
                                    @NotNull HaxeBuildFile buildFile,
@@ -346,16 +356,8 @@ public final class HaxeProgramLaunches {
       runtimeDefaults(output, parameters);
       return;
     }
-    Path launcher = output;
-    if (LimeProjects.isLimeFamily(buildFile.type())) {
-      // lime's target output points inside obj; the launcher is bin/<app file> beside it
-      Path binDir = binDirBesideObj(output.getParent());
-      String appFile = appFileName(buildFile);
-      if (binDir != null && appFile != null) {
-        launcher = binDir.resolve(HaxeSdkUtilBase.getExecutableName(appFile));
-      }
-    }
-    parameters.put(Parameter.EXECUTABLE, launcher.toString());
+    Path launcher = packagedLauncher(project, buildFile, output);
+    if (launcher != null) parameters.put(Parameter.EXECUTABLE, launcher.toString());
   }
 
   /** The runtime runs the output from the output's folder; an empty executable is the RUNTIME, resolved at launch. */
@@ -387,14 +389,6 @@ public final class HaxeProgramLaunches {
   private static void applyInterp(@NotNull InterpRunConfiguration configuration, @NotNull Map<Parameter, String> parameters) {
     ifPresent(parameters, Parameter.WORKING_DIRECTORY, configuration::setWorkingDirectory);
     ifPresent(parameters, Parameter.COMPILER_ARGUMENTS, configuration::setCompilerArguments);
-  }
-
-  /// lime's runnable artifacts live in `<export>/<target>/bin`, beside the obj dir the legacy display path reports.
-  @Nullable
-  private static Path binDirBesideObj(@Nullable Path objDir) {
-    if (objDir == null || !"obj".equals(String.valueOf(objDir.getFileName()))) return objDir;
-    Path targetDir = objDir.getParent();
-    return targetDir == null ? null : targetDir.resolve("bin");
   }
 
   /// The `<app file>` name the tool packages under: lime's default when a lime-family

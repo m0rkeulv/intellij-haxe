@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.v2.toolwindow.actions;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.toolwindow.HaxeToolWindowPanel;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.BuildFileRow;
@@ -27,7 +26,5 @@ public final class HaxeSetActiveBuildFileAction extends HaxeSelectedNodeAction<B
   @Override
   protected void perform(@NotNull Project project, @NotNull BuildFileRow row) {
     HaxeActiveBuildFileStore.getInstance(project).setActiveFile(row.buildFile().file().getPath());
-    // module libraries follow the active file - detach the previous file's set
-    HaxeLibrarySync.sync(project, null);
   }
 }

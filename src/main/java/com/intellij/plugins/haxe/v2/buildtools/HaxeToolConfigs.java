@@ -6,6 +6,9 @@ import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Config files of the HaxeCheckstyle tool family. A directory holding one marks
  * where its tool is meant to run: the tools resolve their config and relative
@@ -38,5 +41,17 @@ public final class HaxeToolConfigs {
       directory = directory.getParent();
     }
     return null;
+  }
+
+  /** {@code haxelib run <tool> [modes] -s <source>...}: mode flags ({@code --check}, {@code --stdin}) go before the source list. */
+  @NotNull
+  public static List<String> toolCommand(@NotNull String haxelib, @NotNull String tool,
+                                         @NotNull List<String> modes, @NotNull List<String> sources) {
+    List<String> command = new ArrayList<>(List.of(haxelib, "run", tool));
+    command.addAll(modes);
+    for (String source : sources) {
+      command.addAll(List.of("-s", source));
+    }
+    return command;
   }
 }

@@ -51,6 +51,49 @@ public class HaxeDisplayConfigurationTest {
     assertEquals(List.of("-D", "beta=2", "-cp", "src"), applied);
   }
 
+  /** The compiler defines my_flag for -D my-flag, the name the editor greys branches under; a remove in either spelling strips the define from the server's arguments. */
+  @Test
+  @DisplayName("remove matches the compiler name of a dashed define")
+  public void testRemoveMatchesTheCompilerNameOfADashedDefine() {
+    List<String> base = List.of("-D", "my-flag", "-D", "other-flag=1", "-main", "Main");
+    OverrideArguments overrides = new OverrideArguments(Set.of("my_flag", "other-flag"), List.of(), null);
+
+    List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
+
+    assertEquals(List.of("-main", "Main"), applied);
+  }
+
+  @Test
+  @DisplayName("removing debug strips the debug flag")
+  public void testRemovingDebugStripsTheDebugFlag() {
+    List<String> base = List.of("-cp", "src", "-debug", "--debug", "-D", "debug");
+    OverrideArguments overrides = new OverrideArguments(Set.of("debug"), List.of(), null);
+
+    List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
+
+    assertEquals(List.of("-cp", "src"), applied);
+  }
+
+  @Test
+  @DisplayName("remove reaches a define nested two includes down")
+  public void testRemoveReachesADefineNestedTwoIncludesDown(@TempDir Path directory) throws IOException {
+    Files.writeString(directory.resolve("build.hxml"), """
+      common.hxml
+      -main Main
+      """);
+    Files.writeString(directory.resolve("common.hxml"), """
+      defines.hxml
+      -cp src
+      """);
+    Files.writeString(directory.resolve("defines.hxml"), "-D legacy_api\n");
+    List<String> base = List.of("--cwd", directory.toString(), "build.hxml");
+    OverrideArguments overrides = new OverrideArguments(Set.of("legacy_api"), List.of(), null);
+
+    List<String> applied = HaxeDisplayConfiguration.applyOverrides(base, overrides);
+
+    assertEquals(List.of("--cwd", directory.toString(), "-cp", "src", "-main", "Main"), applied);
+  }
+
   @Test
   @DisplayName("remove expands an hxml reference to reach its defines")
   public void testRemoveExpandsAnHxmlReferenceToReachItsDefines(@TempDir Path directory) throws IOException {

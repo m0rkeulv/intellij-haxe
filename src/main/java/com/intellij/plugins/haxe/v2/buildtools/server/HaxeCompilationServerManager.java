@@ -11,9 +11,7 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCommandNotifications;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.util.execution.ParametersListUtil;
 import com.intellij.util.net.NetUtils;
@@ -78,7 +76,8 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
     String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
     HaxeServerProcess process = processes.get(executablePath);
     if (process == null) {
-      process = new HaxeServerProcess(executablePath, executablePath, displayNameFor(project, preferredSdkName, executablePath));
+      String displayName = displayNameFor(project, preferredSdkName, executablePath);
+      process = new HaxeServerProcess(executablePath, executablePath, preferredSdkName, displayName);
       processes.put(executablePath, process);
     }
     if (process.isAlive()) {
@@ -144,7 +143,7 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
     if (basePath != null && new File(basePath).isDirectory()) {
       commandLine.withWorkDirectory(basePath);
     }
-    return commandLine;
+    return HaxeToolEnvironment.withSdkOnPath(commandLine, HaxeToolPathResolver.findSdk(project, process.sdkName));
   }
 
   /** The configured fixed port when one is set and no other running instance uses it, otherwise a free port. */

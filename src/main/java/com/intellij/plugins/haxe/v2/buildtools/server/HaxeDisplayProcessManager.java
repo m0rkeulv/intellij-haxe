@@ -10,6 +10,7 @@ import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.FramedDisplayChannel;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeToolEnvironment;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.util.execution.ParametersListUtil;
@@ -56,8 +57,8 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     FramedDisplayChannel channel;
     long failedAt;
 
-    DisplayProcess(@NotNull String executablePath, @NotNull String displayName) {
-      super(idFor(executablePath), executablePath, displayName);
+    DisplayProcess(@NotNull String executablePath, @Nullable String sdkName, @NotNull String displayName) {
+      super(idFor(executablePath), executablePath, sdkName, displayName);
     }
 
     @Override
@@ -96,13 +97,20 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     DisplayProcess process = processes.get(idFor(executablePath));
     if (process == null) {
       String name = HaxeCompilationServerManager.displayNameFor(project, sdkName, executablePath);
-      process = new DisplayProcess(executablePath, HaxeBundle.message("haxe.server.console.display.tab", name));
+      process = new DisplayProcess(executablePath, sdkName, HaxeBundle.message("haxe.server.console.display.tab", name));
       processes.put(process.id, process);
     }
     if (process.isAlive()) return new Channel(process.channel, process.port);
     if (System.currentTimeMillis() - process.failedAt < START_FAILURE_COOLDOWN_MS) return null;
     stopProcessLocked(process);
     return startLocked(process) > 0 ? new Channel(process.channel, process.port) : null;
+  }
+
+  /** The {@link Channel#id()} (listen port) of the SDK's display process while it runs, or -1; starts nothing. */
+  public synchronized int runningIdFor(@Nullable String sdkName) {
+    String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
+    DisplayProcess process = processes.get(idFor(executablePath));
+    return process != null && process.isAlive() ? process.port : -1;
   }
 
   @Override
@@ -141,7 +149,7 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     if (basePath != null && new File(basePath).isDirectory()) {
       commandLine.withWorkDirectory(basePath);
     }
-    return commandLine;
+    return HaxeToolEnvironment.withSdkOnPath(commandLine, HaxeToolPathResolver.findSdk(project, process.sdkName));
   }
 
   @Override

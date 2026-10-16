@@ -10,6 +10,7 @@ import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.configurations.RunProfileState;
 import com.intellij.execution.configurations.RuntimeConfigurationError;
 import com.intellij.execution.configurations.RuntimeConfigurationException;
+import com.intellij.execution.configurations.SearchScopeProvidingRunProfile;
 import com.intellij.execution.process.KillableColoredProcessHandler;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessTerminatedListener;
@@ -20,9 +21,8 @@ import com.intellij.openapi.util.JDOMExternalizerUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolCommandLines;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeUnsavedDocuments;
+import com.intellij.plugins.haxe.v2.buildtools.*;
+import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.PathUtil;
 import com.intellij.util.io.BaseOutputReader;
 import org.jdom.Element;
@@ -38,7 +38,8 @@ import java.util.ArrayList;
  * the command line re-resolves at launch, so target selection, environment SDK
  * and compilation server settings always apply as currently configured.
  */
-public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunProfileState> {
+public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunProfileState>
+  implements SearchScopeProvidingRunProfile {
 
   private static final String BUILD_FILE = "buildFile";
   private static final String ACTION_NAME = "actionName";
@@ -81,6 +82,13 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
     return new HaxeActionRunConfigurationEditor(getProject());
   }
 
+  /** Console links resolve inside the action's build (its work directory and classpaths) before the project at large. */
+  @Override
+  public @NotNull GlobalSearchScope getSearchScope() {
+    if (StringUtil.isEmptyOrSpaces(buildFilePath)) return GlobalSearchScope.allScope(getProject());
+    return HaxeLaunchScopes.forBuildFile(getProject(), buildFilePath);
+  }
+
   @Override
   public void checkConfiguration() throws RuntimeConfigurationException {
     if (StringUtil.isEmptyOrSpaces(buildFilePath)) {
@@ -105,7 +113,9 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
   }
 
   @Override
-  public @Nullable RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment environment) {
+  public @Nullable RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment environment)
+    throws ExecutionException {
+    HaxeProjectTrust.requireTrustForRun(getProject());
     return new CommandLineState(environment) {
       @Override
       protected @NotNull ProcessHandler startProcess() throws ExecutionException {
@@ -155,7 +165,8 @@ public class HaxeActionRunConfiguration extends LocatableConfigurationBase<RunPr
   private ProcessHandler processHandlerFor(@NotNull HaxeCompileCommands.Resolved resolved) throws ExecutionException {
     List<String> command =
       HaxeCompileCommands.connectIfEnabled(getProject(), resolved.containerId(), resolved.connectEligible(), resolved.command());
-    GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, resolved.workDirectory());
+    GeneralCommandLine commandLine =
+      HaxeToolCommandLines.interactive(getProject(), resolved.containerId(), command, resolved.workDirectory());
     return new KillableColoredProcessHandler(commandLine) {
       // a run action wraps the app - long-running, sparse output; the default reader
       // busy-polls it (a pty needs its own blocking reader)

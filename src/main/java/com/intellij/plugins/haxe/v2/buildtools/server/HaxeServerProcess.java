@@ -24,14 +24,17 @@ class HaxeServerProcess {
 
   final String id;
   final String executablePath;
+  /** The SDK the process serves, null for the project default; its folders lead the process's PATH. */
+  @Nullable final String sdkName;
   final String displayName;
   final HaxeServerConsoleOutput output = new HaxeServerConsoleOutput();
   private volatile OSProcessHandler handler;
   int port = -1;
 
-  HaxeServerProcess(@NotNull String id, @NotNull String executablePath, @NotNull String displayName) {
+  HaxeServerProcess(@NotNull String id, @NotNull String executablePath, @Nullable String sdkName, @NotNull String displayName) {
     this.id = id;
     this.executablePath = executablePath;
+    this.sdkName = sdkName;
     this.displayName = displayName;
   }
 

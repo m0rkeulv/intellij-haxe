@@ -28,7 +28,7 @@ public final class HaxeEditToolAction extends HaxeSelectedNodeAction<ToolNode> {
       .findFirst()
       .orElse(new HaxeCustomToolsStore.CustomTool(toolNode.name(), toolNode.detail(), ""));
     var initial = new HaxeCustomActionDialog.EditedCommand(stored.name(), stored.command(), stored.workDirectory());
-    HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forTool(project, initial);
+    HaxeCustomActionDialog dialog = HaxeCustomActionDialog.forTool(project, toolNode.containerId(), initial);
     if (dialog.showAndGet()) {
       var edited = dialog.getEditedCommand();
       var tool = new HaxeCustomToolsStore.CustomTool(edited.name(), edited.command(), edited.workDirectory());

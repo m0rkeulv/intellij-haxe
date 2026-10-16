@@ -3,7 +3,11 @@ package com.intellij.plugins.haxe.v2.buildtools;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
+import com.intellij.execution.ExecutionException;
 import com.intellij.ide.trustedProjects.TrustedProjects;
+import com.intellij.openapi.ui.TestDialog;
+import com.intellij.openapi.ui.TestDialogManager;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
@@ -68,6 +72,23 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
         .getCachedOrSchedule(buildFile, "neko", null, () -> { });
       assertNull(nme, "nme prepare executes project code and must not be scheduled");
     });
+  }
+
+  /** The run gate asks on the EDT; a declined dialog ends the launch with the refusal message. */
+  @Test
+  @DisplayName("untrusted project refuses to start a run configuration")
+  public void testUntrustedProjectRefusesToStartARunConfiguration() {
+    TestDialog previous = TestDialogManager.setTestDialog(TestDialog.NO);
+    try {
+      withDistrustedProject(() -> {
+        ExecutionException refused =
+          assertThrows(ExecutionException.class, () -> HaxeProjectTrust.requireTrustForRun(getProject()));
+        assertEquals(HaxeBundle.message("haxe.trust.run.refused"), refused.getMessage());
+      });
+    }
+    finally {
+      TestDialogManager.setTestDialog(previous);
+    }
   }
 
   /** Runs the body with the project explicitly distrusted, restoring trust after. */

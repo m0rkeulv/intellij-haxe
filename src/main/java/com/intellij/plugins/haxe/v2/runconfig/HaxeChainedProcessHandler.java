@@ -7,6 +7,7 @@ import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.process.ProcessOutputTypes;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.ThrowableComputable;
+import com.intellij.plugins.haxe.v2.buildtools.HaxeForwardingProcessInput;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -93,8 +94,14 @@ public final class HaxeChainedProcessHandler extends ProcessHandler {
     return false;
   }
 
+  /** Console input reaches whichever step is running; the console takes this stream once, before the first step starts. */
   @Override
-  public @Nullable OutputStream getProcessInput() {
+  public @NotNull OutputStream getProcessInput() {
+    return new HaxeForwardingProcessInput(this::runningInput);
+  }
+
+  @Nullable
+  private OutputStream runningInput() {
     ProcessHandler running = current;
     return running != null ? running.getProcessInput() : null;
   }

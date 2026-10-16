@@ -14,8 +14,11 @@ import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.util.text.SemVer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Locale;
 
 /**
  * The language level editor features assume for a PSI element. An element
@@ -70,6 +73,20 @@ public final class HaxeLanguageLevelUtil {
     HaxeLanguageLevel level = containerId != null ? settings.getEffectiveLanguageLevel(containerId)
                                                   : settings.getDefaultLanguageLevel();
     return level.getVersionString() + ".0";
+  }
+
+  /**
+   * The compiler's {@code haxe_ver} value for a dotted version: the version
+   * number {@code major*1000 + minor*100 + patch} divided by 1000, so 4.3.7
+   * reads 4.307 and 4.0.2 reads 4.002. {@code haxe} keeps the dotted form. A
+   * version that does not parse is returned as it is.
+   */
+  @NotNull
+  public static String haxeVerDefineValue(@NotNull String version) {
+    SemVer semVer = SemVer.parseFromText(version);
+    if (semVer == null) return version;
+    int number = semVer.getMajor() * 1000 + semVer.getMinor() * 100 + semVer.getPatch();
+    return String.format(Locale.ROOT, "%d.%03d", number / 1000, number % 1000);
   }
 
   @NotNull

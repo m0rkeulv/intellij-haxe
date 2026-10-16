@@ -193,8 +193,10 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                                                  @NotNull RunConfiguration configuration,
                                                  @NotNull Task task) {
     Debugger debugger = debuggerOf(configuration);
-    HaxeActionBeforeRunDialog dialog = new HaxeActionBeforeRunDialog(configuration.getProject(), task, debugger);
-    return Promises.resolvedPromise(dialog.showAndGet());
+    // a test configuration's step is derived from its tests file and filter: the dialog shows it read-only, an edit would be resynced away
+    boolean derived = configuration instanceof HaxeTestRunConfiguration;
+    HaxeActionBeforeRunDialog dialog = new HaxeActionBeforeRunDialog(configuration.getProject(), task, debugger, derived);
+    return Promises.resolvedPromise(dialog.showAndGet() && !derived);
   }
 
   @Override
@@ -203,8 +205,9 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
                              @NotNull ExecutionEnvironment environment,
                              @NotNull Task task) {
     Project project = configuration.getProject();
-    // safe mode blocks run configurations platform-side; this is the backstop
-    // for any launch path that slips through - no dialog off the EDT
+    // the platform does not block run configurations in an untrusted project;
+    // the action, test and interp configurations ask in getState, and this
+    // covers a Haxe step on any other configuration - no dialog off the EDT
     if (!HaxeProjectTrust.isTrusted(project)) {
       String message = HaxeDebuggerBundle.message("haxe.before.run.untrusted");
       HaxeCommandNotifications.notify(project, getName(), message, NotificationType.ERROR);
@@ -234,7 +237,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
     String title = HaxeDebuggerBundle.message("haxe.before.run.build.title",
                                               task.getActionName(), PathUtil.getFileName(task.getBuildFilePath()));
     String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
-    return runInBuildView(project, command, workDirectory, title);
+    return runInBuildView(project, resolved.containerId(), command, workDirectory, title);
   }
 
   /** Runs the actions the task's action runs before itself, each in the Build tool window; false at the first failure or an unusable chain (notified). */
@@ -254,7 +257,7 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
         HaxeCompileCommands.connectIfEnabled(project, resolved.containerId(), resolved.connectEligible(), resolved.command());
       String workDirectory = StringUtil.notNullize(resolved.workDirectory(), StringUtil.notNullize(project.getBasePath()));
       String title = HaxeDebuggerBundle.message("haxe.before.run.build.title", action.name(), fileName);
-      if (!runInBuildView(project, command, workDirectory, title)) return false;
+      if (!runInBuildView(project, resolved.containerId(), command, workDirectory, title)) return false;
     }
     return true;
   }
@@ -331,12 +334,13 @@ public final class HaxeActionBeforeRunTaskProvider extends BeforeRunTaskProvider
    * output a native build's minutes of compilation look like a hang.
    */
   private static boolean runInBuildView(@NotNull Project project,
+                                        @NotNull String containerId,
                                         @NotNull List<String> command,
                                         @NotNull String workDirectory,
                                         @NotNull String title) {
     KillableColoredProcessHandler handler;
     try {
-      GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(command, workDirectory);
+      GeneralCommandLine commandLine = HaxeToolCommandLines.interactive(project, containerId, command, workDirectory);
       handler = new KillableColoredProcessHandler(commandLine);
     }
     catch (ExecutionException e) {
