@@ -20,6 +20,20 @@ public record JsonTypeRef(String kind, JsonNode args) {
     return "TFun".equals(kind);
   }
 
+  /** The return type of a function type; null for any other kind. */
+  public JsonTypeRef returnType() {
+    return isFunction() ? of(args.path("ret")) : null;
+  }
+
+  /** The type of a function type's parameter by name; null when the type is no function or has no such parameter. */
+  public JsonTypeRef parameterType(String name) {
+    if (!isFunction()) return null;
+    for (JsonNode argument : args.path("args")) {
+      if (name.equals(argument.path("name").asString(""))) return of(argument.path("t"));
+    }
+    return null;
+  }
+
   /**
    * The dot path of a TInst, TEnum, TType or TAbstract as Haxe prints it: the
    * package plus the type name ({@code haxe.ds.StringMap}, {@code Void}).

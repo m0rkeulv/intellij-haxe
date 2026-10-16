@@ -54,9 +54,22 @@ public final class DisplayJson {
     if (!error.isMissingNode()) {
       String errorMessage = error.path("message").asString("unknown error");
       int errorCode = error.path("code").asInt(-1);
-      throw new DisplayRequestException("Display request failed: " + errorMessage + " (code " + errorCode + ")");
+      String detail = firstErrorDetail(error.path("data"));
+      String suffix = detail.isEmpty() ? "" : ": " + abbreviate(detail);
+      throw new DisplayRequestException("Display request failed: " + errorMessage + " (code " + errorCode + ")" + suffix, true);
     }
     return root.path("result").path("result");
+  }
+
+  /**
+   * The first item of an error's {@code data}: a compiler error carries a list
+   * of diagnostics ({@code {message, location}}) or of plain strings.
+   */
+  private static String firstErrorDetail(JsonNode data) {
+    JsonNode first = data.isArray() ? data.path(0) : data;
+    if (first.isMissingNode() || first.isNull()) return "";
+    if (first.isObject()) return first.path("message").asString("");
+    return first.asString("");
   }
 
   private static String abbreviate(String text) {
@@ -283,6 +296,15 @@ public final class DisplayJson {
     return List.copyOf(paths);
   }
 
+  /** The {@code typer/compiledTypes} answer: every type of the compile as a blueprint, members with positions. */
+  public static List<TypeBlueprint> decodeCompiledTypes(JsonNode data) {
+    List<TypeBlueprint> types = new ArrayList<>();
+    for (JsonNode type : data) {
+      types.add(decodeTypeBlueprint(type.path("name").asString(""), type));
+    }
+    return List.copyOf(types);
+  }
+
   public static TypeBlueprint decodeTypeBlueprint(String typeName, JsonNode data) {
     JsonNode args = data.path("args");
     return new TypeBlueprint(
@@ -298,7 +320,8 @@ public final class DisplayJson {
       members.add(new TypeBlueprint.Member(
         field.path("name").asString(""),
         JsonTypeRef.of(field.path("type")),
-        field.path("kind").path("kind").asString("")));
+        field.path("kind").path("kind").asString(""),
+        JsonPos.of(field.path("pos"))));
     }
     return List.copyOf(members);
   }
