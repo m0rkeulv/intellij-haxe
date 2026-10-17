@@ -28,6 +28,16 @@ public class HaxelibInstalledIndexTest {
   }
 
   @Test
+  @DisplayName("a notice line is not a library")
+  public void testANoticeLineIsNotALibrary() {
+    HaxelibInstalledIndex index = HaxelibInstalledIndex.parse(List.of(
+      "Warning: Repository requires reformatting. To reformat, run `haxelib fixrepo`.",
+      "lime: 8.0.0 [8.1.0]"));
+
+    assertEquals(Set.of("lime"), index.getInstalledLibraries());
+  }
+
+  @Test
   @DisplayName("an unknown command answer is an empty index")
   public void testAnUnknownCommandAnswerIsAnEmptyIndex() {
     HaxelibInstalledIndex index = HaxelibInstalledIndex.parse(List.of("Unknown command list"));

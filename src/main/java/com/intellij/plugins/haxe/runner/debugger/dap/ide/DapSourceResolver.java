@@ -5,11 +5,11 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.xdebugger.XDebuggerUtil;
 import com.intellij.xdebugger.XSourcePosition;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
@@ -116,14 +116,10 @@ public final class DapSourceResolver {
     return suffixMatch != null ? suffixMatch : byName;
   }
 
-  // Path.of throws InvalidPathException on server-supplied strings that are
-  // not paths at all ("?" for native frames); anything unparseable is simply
-  // not absolute.
+  // server-supplied strings are not always paths ("?" for native frames); one
+  // naming no usable path is not absolute either
   private static boolean isAbsolute(String normalized) {
-    try {
-      return Path.of(normalized).isAbsolute();
-    } catch (InvalidPathException e) {
-      return false;
-    }
+    Path path = HaxeExternalPaths.pathOf(normalized);
+    return path != null && path.isAbsolute();
   }
 }

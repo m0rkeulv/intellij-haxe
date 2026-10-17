@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildsystem;
 
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -40,9 +41,12 @@ public final class HxmlArguments {
     return cwd;
   }
 
-  @NotNull
+  /** The --cwd value applied to the directory so far; one naming no usable path leaves it unchanged. */
+  @Nullable
   private static Path composedCwd(@Nullable Path cwd, @NotNull String value) {
-    return cwd == null ? Path.of(value) : cwd.resolve(value);
+    Path next = HaxeExternalPaths.pathOf(value);
+    if (next == null) return cwd;
+    return cwd == null ? next : cwd.resolve(next);
   }
 
   /**
@@ -104,12 +108,14 @@ public final class HxmlArguments {
     }
   }
 
-  /** Expands one reference into {@code out}; false when it is unreadable or already being expanded. */
+  /** Expands one reference into {@code out}; false when it names no usable path, is unreadable or is already being expanded. */
   private static boolean expandReference(@NotNull String reference,
                                          @Nullable Path cwd,
                                          @NotNull Set<Path> expanding,
                                          @NotNull List<String> out) {
-    Path hxmlFile = (cwd != null ? cwd.resolve(reference) : Path.of(reference)).normalize();
+    Path referenced = HaxeExternalPaths.pathOf(reference);
+    if (referenced == null) return false;
+    Path hxmlFile = (cwd != null ? cwd.resolve(referenced) : referenced).normalize();
     if (!expanding.add(hxmlFile)) return false;
     try {
       expandInto(parseLines(Files.readAllLines(hxmlFile)), cwd, expanding, out);

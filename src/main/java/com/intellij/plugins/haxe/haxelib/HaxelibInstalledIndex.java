@@ -48,8 +48,9 @@ public class HaxelibInstalledIndex {
    * The index described by {@code haxelib list} output. A library line reads
    * {@code lime-tools: 1.4.0 [1.5.6]}: the name, a colon, the installed
    * versions with the selected one in brackets. Lines without a {@code name:}
-   * prefix (blank lines, notices) are skipped; an "Unknown command" answer
-   * is an empty index.
+   * prefix and a bracketed selection (blank lines, notices such as a newer
+   * haxelib's repository-format warning) are skipped; an "Unknown command"
+   * answer is an empty index.
    */
   @NotNull
   public static HaxelibInstalledIndex parse(@NotNull List<String> listOutput) {
@@ -57,7 +58,7 @@ public class HaxelibInstalledIndex {
     if (!listOutput.isEmpty() && listOutput.getFirst().contains("Unknown command")) return index;
     for (String line : listOutput) {
       int firstColon = line.indexOf(":");
-      if (firstColon <= 0) continue;
+      if (firstColon <= 0 || line.indexOf('[', firstColon) < 0) continue;
       String libName = line.substring(0, firstColon);
       String libVersions = line.substring(firstColon + 1);
       processVersions(libName, libVersions.trim(), index);

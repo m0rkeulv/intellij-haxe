@@ -55,4 +55,18 @@ public class HaxelibPathParserTest {
     assertNull(sections.get(1).version());
     assertEquals(List.of("C:/dev/mylib/extra-src/"), sections.get(1).classpaths());
   }
+
+  @Test
+  @DisplayName("notices and network paths are not classpaths")
+  public void noticesAndNetworkPathsAreNotClasspaths() {
+    // a newer haxelib than the one a haxe preview bundles warns before the classpaths
+    List<HaxelibPathParser.LibrarySection> sections = HaxelibPathParser.parseSections("lime", List.of(
+      "Warning: Repository requires reformatting. To reformat, run `haxelib fixrepo`.",
+      "\\\\server\\share\\lime/8,1,2/src/",
+      "C:/HaxeToolkit/haxe/lib/lime/8,1,2/src/",
+      "-D lime=8.1.2"));
+
+    assertEquals(1, sections.size());
+    assertEquals(List.of("C:/HaxeToolkit/haxe/lib/lime/8,1,2/src/"), sections.getFirst().classpaths());
+  }
 }
