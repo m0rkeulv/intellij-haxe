@@ -31,9 +31,10 @@ public final class HaxeKnownBuildFiles {
   private HaxeKnownBuildFiles() {
   }
 
-  /** A module's known build files (detected + manual − hidden). Call inside a read action. */
+  /** A module's known build files (detected + manual − hidden); none for a disposed module. Call inside a read action. */
   @NotNull
   public static List<HaxeBuildFile> forModule(@NotNull Project project, @NotNull Module module) {
+    if (module.isDisposed()) return List.of();
     return mergeWithStore(project, module.getName(), HaxeBuildFileScanner.scan(module));
   }
 
