@@ -90,6 +90,15 @@ public class HaxeProjectXmlPathReferenceTest extends HaxeLightFixtureTestCase {
     assertNull(pathReferenceAtCaret());
   }
 
+  @Test
+  @DisplayName("resolves paths in a library include file")
+  public void testResolvesPathsInALibraryIncludeFile() {
+    addTargets();
+    myFixture.configureByText("include.xml", "<extension><source path=\"s<caret>rc\"/></extension>");
+
+    assertEquals("src", targetOf(pathReferenceAtCaret()));
+  }
+
   private void addTargets() {
     myFixture.addFileToProject("defs.xml", "<project/>");
     myFixture.addFileToProject("sub/include.xml", "<project/>");

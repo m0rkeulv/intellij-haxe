@@ -31,6 +31,14 @@ public final class ProjectXmlFixtures {
     </project>
     """;
 
+  /** A library's include file: lime reads its {@code <extension>} root like a project. */
+  public static final String LIBRARY_INCLUDE_SOURCE = """
+    <extension>
+      <source path="src"/>
+      <haxelib name="lime"/>
+    </extension>
+    """;
+
   public static final String MAVEN_POM_SOURCE = """
     <project>
       <modelVersion>4.0.0</modelVersion>

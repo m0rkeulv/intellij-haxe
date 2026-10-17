@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.FieldSource;
 import java.util.List;
 
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.CLASSPATH_ONLY_PROJECT_SOURCE;
+import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.LIBRARY_INCLUDE_SOURCE;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.MAVEN_POM_SOURCE;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.NME_SAMPLE_PROJECT_SOURCE;
 import static com.intellij.plugins.haxe.buildsystem.ProjectXmlFixtures.SECTIONED_LIME_PROJECT_SOURCE;
@@ -58,11 +59,19 @@ public class HaxeBuildFileScannerTest extends HaxeCodeInsightFixtureTestCase {
     arguments("sectioned.xml", SECTIONED_LIME_PROJECT_SOURCE, HaxeBuildFileType.LIME),
     // under the lime extensions a project without a library or a source path is nobody's
     arguments("app-only.xml", NME_SAMPLE_PROJECT_SOURCE, null),
+    // lime merges a library's include file into the build naming the library and never builds one itself
+    arguments("include.xml", LIME_PROJECT_SOURCE, null),
+    arguments("include.lime", LIME_PROJECT_SOURCE, null),
+    arguments("include.hxp", "class Include extends HXProject {}\n", null),
+    arguments("extension.xml", LIBRARY_INCLUDE_SOURCE, null),
+    arguments("project.hxp", "class Project extends HXProject {}\n", HaxeBuildFileType.HXP_PROJECT),
     arguments("nme-project.nmml", NME_PROJECT_SOURCE, HaxeBuildFileType.NMML),
     // the extension picks the nme tool even when the project declares openfl
     arguments("openfl-project.nmml", OPENFL_PROJECT_SOURCE, HaxeBuildFileType.NMML),
     // NME needs neither <haxelib> nor <source>
     arguments("sample-shape.nmml", NME_SAMPLE_PROJECT_SOURCE, HaxeBuildFileType.NMML),
+    // NME builds any .nmml, its library include file too
+    arguments("include.nmml", NME_PROJECT_SOURCE, HaxeBuildFileType.NMML),
     arguments("no-project.nmml", "<config/>", null),
     arguments("pom.xml", MAVEN_POM_SOURCE, null),
     arguments("notes.txt", "<project/>", null));

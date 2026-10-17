@@ -9,6 +9,7 @@ import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.plugins.haxe.buildsystem.hxml.HXMLFileType;
 import com.intellij.plugins.haxe.buildsystem.hxp.HxpFileType;
 import com.intellij.plugins.haxe.buildsystem.lime.LimeProjectShape;
@@ -143,10 +144,17 @@ public final class HaxeBuildFileScanner {
     String extension = extensionOf(file.getName());
     return switch (extension) {
       case HXMLFileType.DEFAULT_EXTENSION -> HaxeBuildFileType.HXML;
-      case HxpFileType.DEFAULT_EXTENSION -> isLimeHxpProject(project, file) ? HaxeBuildFileType.HXP_PROJECT : HaxeBuildFileType.HXP_SCRIPT;
+      case HxpFileType.DEFAULT_EXTENSION -> hxpType(project, file);
       case NMMLFileType.DEFAULT_EXTENSION -> nmmlType(file);
       default -> LimeProjectShape.FILE_EXTENSIONS.contains(extension) ? limeFamilyType(file) : null;
     };
+  }
+
+  /** A lime project script or a plain hxp build script; lime's include.hxp is a library's include file and no build of its own. */
+  @Nullable
+  private static HaxeBuildFileType hxpType(@NotNull Project project, @NotNull VirtualFile file) {
+    if (ProjectXmlVocabulary.isLibraryIncludeFileName(file.getName())) return null;
+    return isLimeHxpProject(project, file) ? HaxeBuildFileType.HXP_PROJECT : HaxeBuildFileType.HXP_SCRIPT;
   }
 
   /**
@@ -159,9 +167,15 @@ public final class HaxeBuildFileScanner {
     return shapeOf(file).projectRoot() ? HaxeBuildFileType.NMML : null;
   }
 
-  /** Under the Lime extensions: a {@code <project>} declaring a library or a source path is a Lime project, an OpenFL one when a declared library is openfl; anything else (a maven pom) is no build file. */
+  /**
+   * Under the Lime extensions: a {@code <project>} declaring a library or a
+   * source path is a Lime project, an OpenFL one when a declared library is
+   * openfl; anything else (a maven pom, a library's include file) is no build file.
+   */
   @Nullable
   private static HaxeBuildFileType limeFamilyType(@NotNull VirtualFile file) {
+    // lime merges a library's include file into the build naming the library and skips it when looking for a project
+    if (ProjectXmlVocabulary.isLibraryIncludeFileName(file.getName())) return null;
     LimeProjectShape shape = shapeOf(file);
     if (shape.isOpenfl()) return HaxeBuildFileType.OPENFL;
     return shape.isLime() ? HaxeBuildFileType.LIME : null;
