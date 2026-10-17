@@ -53,8 +53,10 @@ public final class HaxeBuildFilesProjectAware implements ExternalSystemProjectAw
     return projectId;
   }
 
+  // the tracker also asks from VFS listeners that run while the project is being disposed
   @Override
   public @NotNull Set<String> getSettingsFiles() {
+    if (project.isDisposed()) return Set.of();
     return HaxeReadActions.compute(() -> {
       Set<String> files = new HashSet<>();
       for (HaxeBuildFile buildFile : HaxeKnownBuildFiles.all(project)) {
