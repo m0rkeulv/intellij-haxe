@@ -7,7 +7,6 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
-import com.intellij.ide.trustedProjects.TrustedProjects;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
@@ -16,12 +15,13 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static com.intellij.plugins.haxe.v2.buildtools.HaxeTrustTestUtil.withDistrustedProject;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * The trust gates in front of project-code execution. Headless runs
- * auto-trust every project, but an EXPLICIT distrust wins over that
- * default — which is exactly what these tests set (and restore).
+ * auto-trust every project; the distrusting tests distrust it for their body
+ * ({@link HaxeTrustTestUtil#withDistrustedProject}).
  */
 @DisplayName("Build tools: project trust gating")
 public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
@@ -41,7 +41,7 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("untrusted project blocks background evaluation")
   public void testUntrustedProjectBlocksBackgroundEvaluation() {
-    withDistrustedProject(() -> {
+    withDistrustedProject(getProject(), () -> {
       assertFalse(HaxeProjectTrust.isTrusted(getProject()));
       assertFalse(HaxeProjectTrust.checkForBackgroundEvaluation(getProject()));
     });
@@ -50,7 +50,7 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
   @Test
   @DisplayName("untrusted project refuses the compilation server")
   public void testUntrustedProjectRefusesTheCompilationServer() {
-    withDistrustedProject(() -> {
+    withDistrustedProject(getProject(), () -> {
       int port = HaxeCompilationServerManager.getInstance(getProject()).ensureRunning(null);
       assertEquals(-1, port, "an untrusted project must not start a compilation server");
     });
@@ -63,7 +63,7 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile projectXml = myFixture.addFileToProject("project.xml", "<project/>").getVirtualFile();
     HaxeBuildFile buildFile = new HaxeBuildFile(projectXml, HaxeBuildFileType.LIME);
 
-    withDistrustedProject(() -> {
+    withDistrustedProject(getProject(), () -> {
       var lime = HaxeLimeProjectInfoService.getInstance(project)
         .getCachedOrSchedule(buildFile, "html5", null, () -> { });
       assertNull(lime, "lime evaluation executes project code and must not be scheduled");
@@ -80,7 +80,7 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
   public void testUntrustedProjectRefusesToStartARunConfiguration() {
     TestDialog previous = TestDialogManager.setTestDialog(TestDialog.NO);
     try {
-      withDistrustedProject(() -> {
+      withDistrustedProject(getProject(), () -> {
         ExecutionException refused =
           assertThrows(ExecutionException.class, () -> HaxeProjectTrust.requireTrustForRun(getProject()));
         assertEquals(HaxeBundle.message("haxe.trust.run.refused"), refused.getMessage());
@@ -88,17 +88,6 @@ public class HaxeProjectTrustTest extends HaxeCodeInsightFixtureTestCase {
     }
     finally {
       TestDialogManager.setTestDialog(previous);
-    }
-  }
-
-  /** Runs the body with the project explicitly distrusted, restoring trust after. */
-  private void withDistrustedProject(Runnable body) {
-    TrustedProjects.setProjectTrusted(getProject(), false);
-    try {
-      body.run();
-    }
-    finally {
-      TrustedProjects.setProjectTrusted(getProject(), true);
     }
   }
 }

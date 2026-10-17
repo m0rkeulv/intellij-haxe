@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.display;
 
-import com.intellij.ide.trustedProjects.TrustedProjects;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -22,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static com.intellij.plugins.haxe.v2.buildtools.HaxeTrustTestUtil.withDistrustedProject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -52,13 +52,7 @@ public class HaxeCompilerDisplayServiceTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("untrusted project may not use the server")
   public void testUntrustedProjectMayNotUseTheServer() {
-    TrustedProjects.setProjectTrusted(getProject(), false);
-    try {
-      assertFalse(displayService().mayUseServer());
-    }
-    finally {
-      TrustedProjects.setProjectTrusted(getProject(), true);
-    }
+    withDistrustedProject(getProject(), () -> assertFalse(displayService().mayUseServer()));
   }
 
   @Test
