@@ -3,9 +3,11 @@ package com.intellij.plugins.haxe.v2.buildtools.libraries;
 import com.intellij.openapi.roots.LibraryOrderEntry;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.OrderEntry;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.haxelib.*;
 import com.intellij.plugins.haxe.haxelib.HaxelibRepositoryLayout;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph.Library;
@@ -343,6 +345,9 @@ public final class HaxeLibrarySync {
         for (LibrarySection section : HaxelibPathParser.parseSections(dependency.name(), output)) {
           String version = sectionVersion(section, dependency);
           defines.putIfAbsent(section.name(), version != null ? version : FLAG_DEFINE_VALUE);
+          for (HaxeDefine extraDefine : section.extraDefines()) {
+            defines.putIfAbsent(extraDefine.name(), extraDefine.value() != null ? extraDefine.value() : FLAG_DEFINE_VALUE);
+          }
           closure.add(section.name());
           resolvedLibraries.putIfAbsent(section.name(), resolvedLibrary(section, version));
           if (section.classpaths().isEmpty()) continue;
@@ -361,12 +366,20 @@ public final class HaxeLibrarySync {
     return new Resolution(libraries, definesByDependency, resolvedLibraries, closureByDependency);
   }
 
-  /** The graph node of a section: its resolved version and kind, and the requirements of the haxelib.json above its roots. */
+  /** The graph node of a section: its resolved version and kind, and the requirements and folder of the haxelib.json above its roots. */
   @NotNull
   private static Library resolvedLibrary(@NotNull LibrarySection section, @Nullable String version) {
     Path manifest = HaxelibManifest.find(section.classpaths());
     List<HaxeLibraryGraph.Requirement> requires = manifest == null ? List.of() : HaxelibManifest.requirements(manifest);
-    return new Library(section.name(), version, isScmCheckout(section), requires);
+    return new Library(section.name(), version, isScmCheckout(section), requires, section.extraDefines(), libraryRoot(section, manifest));
+  }
+
+  /** The library's folder as lime takes it: the haxelib.json's, else the classpath haxelib prints right before the library's version define. */
+  @Nullable
+  private static String libraryRoot(@NotNull LibrarySection section, @Nullable Path manifest) {
+    if (manifest != null) return FileUtil.toSystemIndependentName(manifest.getParent().toString());
+    if (section.classpaths().isEmpty()) return null;
+    return FileUtil.toSystemIndependentName(Path.of(section.classpaths().getLast()).toString());
   }
 
   /// The section carries its own version; the queried library itself may only know it from the dependency.

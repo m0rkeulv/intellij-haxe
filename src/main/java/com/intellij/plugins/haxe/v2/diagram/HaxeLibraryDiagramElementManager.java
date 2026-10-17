@@ -4,12 +4,10 @@ import com.intellij.diagram.AbstractDiagramElementManager;
 import com.intellij.diagram.DiagramBuilder;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.DataContext;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
-import com.intellij.plugins.haxe.v2.buildsystem.HxmlIncludeTree;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import com.intellij.plugins.haxe.v2.diagram.HaxeLibraryDiagramElement.Define;
 import com.intellij.ui.SimpleColoredText;
@@ -25,9 +23,10 @@ import java.util.List;
 /**
  * How the diagram presents an element: the root element comes out of the
  * opener's data context, a box is titled with the file or library name, and
- * its items are compiler defines - the ones a file's own lines declare, and
- * for a library the {@code -D name=version} it contributes - which the
- * Defines category toggles.
+ * its items are compiler defines - the ones a file's own lines declare, for a
+ * library its {@code -D name=version} and the defines of its extraParams.hxml,
+ * and for a library's include file the ones the build takes from it - which
+ * the Defines category toggles.
  */
 final class HaxeLibraryDiagramElementManager extends AbstractDiagramElementManager<HaxeLibraryDiagramElement> {
 
@@ -49,7 +48,10 @@ final class HaxeLibraryDiagramElementManager extends AbstractDiagramElementManag
 
   @Override
   public @NotNull String getElementTitle(@NotNull HaxeLibraryDiagramElement element) {
-    return element.isBuildFile() ? FileUtil.toSystemIndependentName(element.key()).replaceAll(".*/", "") : element.key();
+    if (!element.isBuildFile()) return element.key();
+    String includeTitle = HaxeLibraryIncludeFiles.titleOf(element.key());
+    // otherwise the file name: everything up to the last slash dropped
+    return includeTitle != null ? includeTitle : FileUtil.toSystemIndependentName(element.key()).replaceAll(".*/", "");
   }
 
   @Override
@@ -65,23 +67,24 @@ final class HaxeLibraryDiagramElementManager extends AbstractDiagramElementManag
 
   @Override
   public Object @NotNull [] getNodeItems(@NotNull HaxeLibraryDiagramElement element, @NotNull DiagramBuilder builder) {
-    return ReadAction.compute(() -> defines(builder.getProject(), element)).toArray();
+    if (builder.getDataModel() instanceof HaxeLibraryDiagramDataModel model) {
+      List<Define> fileDefines = model.fileDefines(element);
+      if (fileDefines != null) return fileDefines.toArray();
+    }
+    return libraryDefines(builder.getProject(), element).toArray();
   }
 
-  /** The defines a file's own lines declare, or the define a library contributes. Read action. */
+  /** The defines a library contributes, from the last sync; none for a file the model has not read. */
   @NotNull
-  private static List<Define> defines(@NotNull Project project, @NotNull HaxeLibraryDiagramElement element) {
+  private static List<Define> libraryDefines(@NotNull Project project, @NotNull HaxeLibraryDiagramElement element) {
     List<Define> defines = new ArrayList<>();
-    if (element.isBuildFile()) {
-      HxmlIncludeTree tree = HaxeLibraryDiagramSources.treeOf(project, element.key());
-      if (tree == null) return defines;
-      for (HaxeDefine define : tree.own().defines()) {
-        defines.add(new Define(define.name(), define.value()));
-      }
-      return defines;
-    }
+    if (element.isBuildFile()) return defines;
     HaxeLibraryGraph.Library library = HaxeLibraryGraph.getInstance(project).library(element.key());
-    if (library != null) defines.add(new Define(library.name(), library.version()));
+    if (library == null) return defines;
+    defines.add(new Define(library.name(), library.version()));
+    for (HaxeDefine define : library.extraDefines()) {
+      defines.add(new Define(define.name(), define.value()));
+    }
     return defines;
   }
 

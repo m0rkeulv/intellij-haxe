@@ -2,6 +2,7 @@ package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -32,9 +33,16 @@ public final class HaxeLibraryGraph {
   /**
    * One resolved library: its name as haxelib printed it, the version
    * haxelib selected (null when it printed none), whether it serves from a
-   * git or hg checkout, and what its haxelib.json requires.
+   * git or hg checkout, what its haxelib.json requires, the defines its
+   * extraParams.hxml sets, and the folder that haxelib.json sits in (null
+   * when none was found).
    */
-  public record Library(@NotNull String name, @Nullable String version, boolean scmCheckout, @NotNull List<Requirement> requires) {
+  public record Library(@NotNull String name,
+                        @Nullable String version,
+                        boolean scmCheckout,
+                        @NotNull List<Requirement> requires,
+                        @NotNull List<HaxeDefine> extraDefines,
+                        @Nullable String root) {
   }
 
   /** By lower-cased name. */

@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Build tools: library graph")
 public class HaxeLibraryGraphTest {
 
-  private static final Library HAXEPARSER = new Library("haxeparser", "4.3.0", true, List.of(new Requirement("hxparse", null)));
-  private static final Library HXPARSE = new Library("hxparse", "4.3.0", true, List.of());
-  private static final Library UTEST = new Library("utest", "1.13.2", false, List.of());
+  private static final Library HAXEPARSER = new Library("haxeparser", "4.3.0", true, List.of(new Requirement("hxparse", null)), List.of(), null);
+  private static final Library HXPARSE = new Library("hxparse", "4.3.0", true, List.of(), List.of(), null);
+  private static final Library UTEST = new Library("utest", "1.13.2", false, List.of(), List.of(), null);
 
   @Test
   @DisplayName("libraries are found whatever the case and know their dependents")
