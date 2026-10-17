@@ -137,6 +137,12 @@ dependencies {
 
 }
 
+// No test here runs on JUnit 4. The platform's tests-bootstrap adds a vintage engine of its own
+// JUnit (6.x on 2026.3), which fails at discovery against the catalog's JUnit platform.
+configurations.configureEach {
+    exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
+}
+
 // Configure Gradle IntelliJ Plugin - read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellijPlatform {
     pluginConfiguration {
