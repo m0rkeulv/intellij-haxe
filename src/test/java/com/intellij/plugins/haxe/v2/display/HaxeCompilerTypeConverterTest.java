@@ -26,6 +26,7 @@ public class HaxeCompilerTypeConverterTest extends HaxeToolkitLightFixtureTestCa
       Green;
     }
     typedef Alias = String;
+    private typedef Secret = Int;
     class Main {
       static function main() {}
     }
@@ -56,6 +57,17 @@ public class HaxeCompilerTypeConverterTest extends HaxeToolkitLightFixtureTestCa
 
     assertEquals("Color", enumType.toStringWithoutConstant());
     assertEquals("Alias", typedefType.toStringWithoutConstant());
+  }
+
+  @Test
+  @DisplayName("a module private typedef")
+  public void testAModulePrivateTypedef() {
+    PsiFile main = myFixture.addFileToProject("Main.hx", MAIN_HX_SOURCE);
+
+    // the compiler files a private type under an extra "_" + module package segment
+    ResultHolder type = convert(wireType("TType", "_Main.Main", "Secret"), main);
+
+    assertEquals("Secret", type.toStringWithoutConstant());
   }
 
   @Test
