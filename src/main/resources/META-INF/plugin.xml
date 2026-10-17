@@ -70,6 +70,7 @@
     <psi.referenceContributor language="Haxe" implementation="com.intellij.plugins.haxe.ide.references.HaxeStringLiteralReferenceContributor"/>
     <psi.referenceContributor language="XML" implementation="com.intellij.plugins.haxe.ide.references.HaxeProjectXmlPathReferenceContributor"/>
     <defaultHighlightingSettingProvider implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewHighlightingSetting"/>
+    <highlightErrorFilter implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewErrorFilter"/>
 
     <sdkType implementation="com.intellij.plugins.haxe.config.sdk.HaxeSdkType"/>
     <!-- HAXE_MODULE stays registered so legacy projects still open; the v1
