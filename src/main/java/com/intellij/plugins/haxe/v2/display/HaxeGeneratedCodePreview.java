@@ -5,6 +5,7 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.lang.psi.HaxeClass;
 import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
@@ -32,7 +33,9 @@ import java.util.regex.Pattern;
 /// highlighting and folding apply once the declaration headers are rewritten
 /// ([#sanitize]). Preview files carry [#PREVIEW_KEY]. The semantic
 /// annotators and the per-file highlighting level keep error analysis off
-/// them, while the color annotators still paint.
+/// them, while the color annotators still paint. Parse errors are hidden too
+/// ([HaxeGeneratedPreviewErrorFilter]): the dump printer writes a few
+/// constructs no Haxe parser accepts.
 ///
 /// The work is split by thread: [#prepare] does the file IO, parsing and
 /// offset lookup on a BACKGROUND thread, and [#openPrepared] only opens the
@@ -42,6 +45,11 @@ public final class HaxeGeneratedCodePreview {
 
   /** Marks preview virtual files; the value is the previewed module's dot path. */
   public static final Key<String> PREVIEW_KEY = Key.create("haxe.generated.preview.dotpath");
+
+  /** Whether the file is a generated-code preview. */
+  public static boolean isPreview(@Nullable VirtualFile file) {
+    return file != null && file.getUserData(PREVIEW_KEY) != null;
+  }
 
   /** A ready-to-open preview: the rendered file and the caret offset of the requested member. */
   public record PreparedPreview(@NotNull LightVirtualFile file, int offset) {
@@ -112,8 +120,8 @@ public final class HaxeGeneratedCodePreview {
   /**
    * Rewrites qualified declaration headers into a package statement plus
    * simple names, and prepends a banner saying what the reader is looking at.
-   * Backtick-marked unbound identifiers need no rewriting: the grammar parses
-   * them.
+   * Backtick names (unbound identifiers, the compiler's temporaries) need no
+   * rewriting: the grammar parses them.
    */
   @NotNull
   static String sanitize(@NotNull String dumpText) {

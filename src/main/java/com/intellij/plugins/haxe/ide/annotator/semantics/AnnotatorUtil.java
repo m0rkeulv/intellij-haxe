@@ -1,7 +1,6 @@
 package com.intellij.plugins.haxe.ide.annotator.semantics;
 
 import com.intellij.lang.injection.InjectedLanguageManager;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.lang.parser.HaxePsiDocCommentImpl;
 import com.intellij.plugins.haxe.lang.psi.impl.HaxeInactiveBody;
 import com.intellij.plugins.haxe.metadata.psi.HaxeMeta;
@@ -90,8 +89,7 @@ public class AnnotatorUtil {
    */
   public static boolean isInGeneratedPreview(@NotNull PsiElement element) {
     PsiFile file = element.getContainingFile();
-    VirtualFile virtualFile = file != null ? file.getVirtualFile() : null;
-    return virtualFile != null && virtualFile.getUserData(HaxeGeneratedCodePreview.PREVIEW_KEY) != null;
+    return file != null && HaxeGeneratedCodePreview.isPreview(file.getVirtualFile());
   }
 
   /**

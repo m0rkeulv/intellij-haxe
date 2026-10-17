@@ -59,7 +59,7 @@ public final class HaxeShowPostMacroFileAction extends AnAction {
     Project project = e.getProject();
     if (project == null || !(e.getData(CommonDataKeys.PSI_FILE) instanceof HaxeFile file)) return null;
     VirtualFile virtualFile = file.getVirtualFile();
-    if (virtualFile == null || virtualFile.getUserData(HaxeGeneratedCodePreview.PREVIEW_KEY) != null) return null;
+    if (virtualFile == null || HaxeGeneratedCodePreview.isPreview(virtualFile)) return null;
     if (!reachesBuildMacro(file)) return null;
     return HaxeCompilerFeatureAvailability.isAvailable(project, virtualFile) ? file : null;
   }
