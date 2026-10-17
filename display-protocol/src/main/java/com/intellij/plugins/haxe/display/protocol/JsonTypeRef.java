@@ -110,14 +110,25 @@ public record JsonTypeRef(String kind, JsonNode args) {
    * class-name indexes use. A module's main type is {@code pack.Module}, and
    * any other type the module declares is {@code pack.Module.SubType}. For
    * example, {@code Void} is declared in {@code StdTypes}, so its name is
-   * {@code StdTypes.Void}. Empty when the type name is missing.
+   * {@code StdTypes.Void}. A module-private type is named like any other,
+   * although the compiler files it under an extra package segment. Empty when
+   * the type name is missing.
    */
   public static String qualifiedNameOf(JsonNode typePath) {
     String typeName = typePath.path("typeName").asString("");
     if (typeName.isEmpty()) return "";
     String moduleName = typePath.path("moduleName").asString(typeName);
     String moduleSegment = moduleName.equals(typeName) ? "" : moduleName + ".";
-    return packagePrefix(typePath) + moduleSegment + typeName;
+    return withoutPrivateSegment(packagePrefix(typePath), moduleName) + moduleSegment + typeName;
+  }
+
+  // the compiler files a module-private type under an extra last package segment, "_" plus the
+  // module name (hxparse._ParserBuilderImpl.ParserCase); no real package looks like that, as a
+  // package name must start lowercase after its underscores and a module name never does
+  private static String withoutPrivateSegment(String packagePrefix, String moduleName) {
+    String segment = "_" + moduleName + ".";
+    boolean marked = packagePrefix.equals(segment) || packagePrefix.endsWith("." + segment);
+    return marked ? packagePrefix.substring(0, packagePrefix.length() - segment.length()) : packagePrefix;
   }
 
   /** The {@code pack} segments of a type path, each followed by a dot. */
