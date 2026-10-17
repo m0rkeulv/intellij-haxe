@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -45,11 +46,13 @@ public final class HaxeBuildClasspaths {
 
   /**
    * The entry resolved to an existing DIRECTORY - absolute entries directly,
-   * relative ones against the anchor - or null.
+   * relative ones against the anchor - or null, also for an entry naming no
+   * usable path.
    */
   @Nullable
   static VirtualFile resolveClasspathEntry(@NotNull VirtualFile anchor, @NotNull String entry) {
     String normalized = normalizeEntry(entry);
+    if (HaxeExternalPaths.pathOf(normalized) == null) return null;
     VirtualFile resolved = OSAgnosticPathUtil.isAbsolute(normalized)
                            ? LocalFileSystem.getInstance().findFileByPath(normalized)
                            : anchor.findFileByRelativePath(normalized);

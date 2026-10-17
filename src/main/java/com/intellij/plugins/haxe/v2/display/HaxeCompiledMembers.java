@@ -3,6 +3,7 @@ package com.intellij.plugins.haxe.v2.display;
 import com.intellij.plugins.haxe.display.protocol.JsonPos;
 import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -109,11 +110,14 @@ final class HaxeCompiledMembers {
   /**
    * A file path as a lookup key: forward slashes, absolute (a relative one is
    * taken from the work directory the compile ran in), lower-cased on a
-   * case-insensitive file system.
+   * case-insensitive file system. A position naming no usable path keeps its
+   * text.
    */
   @NotNull
   static String normalizePath(@NotNull String path, @NotNull String workDirectory, boolean caseSensitive) {
-    String text = Path.of(workDirectory).resolve(path).normalize().toString().replace('\\', '/');
+    Path parsed = HaxeExternalPaths.pathOf(path);
+    String resolved = parsed == null ? path : Path.of(workDirectory).resolve(parsed).normalize().toString();
+    String text = resolved.replace('\\', '/');
     return caseSensitive ? text : text.toLowerCase(Locale.ROOT);
   }
 }

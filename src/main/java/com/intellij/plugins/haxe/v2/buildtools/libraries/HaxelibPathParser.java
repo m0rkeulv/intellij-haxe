@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -7,9 +8,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Parses `haxelib path <lib>` output: bare lines are classpath roots (including the
- * lib's dependencies), lines starting with a dash are compiler flags (-D/-L), and
- * error text has no path shape.
+ * Parses `haxelib path <lib>` output: lines naming an absolute local path are
+ * classpath roots (including the lib's dependencies), lines starting with a dash
+ * are compiler flags (-D/-L). Anything else is haxelib talking - an error, or a
+ * notice such as a newer haxelib's repository-format warning - and is skipped.
  */
 public final class HaxelibPathParser {
 
@@ -48,7 +50,7 @@ public final class HaxelibPathParser {
         continue;
       }
       if (trimmed.startsWith("-")) continue;
-      if (trimmed.startsWith("Error") || trimmed.contains("is not installed")) continue;
+      if (HaxeExternalPaths.absolutePathOf(trimmed) == null) continue;
       pending.add(trimmed);
     }
     if (!pending.isEmpty()) {

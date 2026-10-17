@@ -97,6 +97,14 @@ public class HxmlArgumentsTest {
   }
 
   @Test
+  @DisplayName("an unusable cwd leaves the work directory unchanged")
+  public void testAnUnusableCwdLeavesTheWorkDirectoryUnchanged() {
+    Path composed = HxmlArguments.workDirectory(List.of("--cwd", "build", "--cwd", "//server/share"));
+
+    assertEquals(Path.of("build"), composed);
+  }
+
+  @Test
   @DisplayName("unreadable hxml reference is kept as-is")
   public void testUnreadableHxmlReferenceIsKeptAsIs() {
     List<String> expanded = HxmlArguments.expandReferences(List.of("missing.hxml", "-main", "Main"));

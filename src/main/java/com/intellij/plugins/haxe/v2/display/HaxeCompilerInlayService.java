@@ -21,6 +21,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeComponentName;
 import com.intellij.plugins.haxe.lang.psi.HaxeLocalFunctionDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.lang.psi.HaxeParameter;
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlArguments;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlFileParser;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
@@ -251,6 +252,7 @@ public final class HaxeCompilerInlayService implements Disposable {
 
   @Nullable
   private static byte[] fileBytes(@NotNull String path) {
+    if (HaxeExternalPaths.absolutePathOf(path) == null) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
     if (file == null) return null;
     try {

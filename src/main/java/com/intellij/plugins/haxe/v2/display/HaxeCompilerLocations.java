@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeExpression;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
 import com.intellij.plugins.haxe.lang.util.HaxeExpressionUtil;
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -38,9 +39,10 @@ final class HaxeCompilerLocations {
   private HaxeCompilerLocations() {
   }
 
-  /** The file a location names, or null when it is gone. */
+  /** The file a location names, or null when it is gone or the location names no usable path. */
   @Nullable
   static VirtualFile fileOf(@NotNull Location location) {
+    if (HaxeExternalPaths.absolutePathOf(location.file()) == null) return null;
     VirtualFile file = LocalFileSystem.getInstance().findFileByPath(location.file());
     return file != null && file.isValid() ? file : null;
   }

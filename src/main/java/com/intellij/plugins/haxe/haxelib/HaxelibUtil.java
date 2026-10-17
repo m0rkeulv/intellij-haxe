@@ -29,9 +29,9 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.*;
 import com.intellij.plugins.haxe.HaxeBundle;
-
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.util.HaxeEventLogUtil;
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import com.intellij.plugins.haxe.util.HaxeFileUtil;
 import com.intellij.plugins.haxe.util.HaxeStringUtil;
 import com.intellij.psi.xml.XmlDocument;
@@ -39,7 +39,6 @@ import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
 import com.intellij.util.Processor;
 import lombok.CustomLog;
-
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -99,8 +98,10 @@ public class HaxelibUtil {
   private static VirtualFile _getLibraryBasePath(@NotNull final Sdk sdk, VirtualFile workDir) {
       List<String> output = HaxelibCommandUtils.issueHaxelibCommand(sdk, workDir, "config");
       for (String s : output) {
-        if (s.isEmpty()) continue;
-        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(s);
+        // a newer haxelib prints notices around the path
+        String line = s.trim();
+        if (HaxeExternalPaths.absolutePathOf(line) == null) continue;
+        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(line);
         if (null != file) {
           return file;
         }

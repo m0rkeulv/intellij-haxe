@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools.info;
 
 import com.intellij.plugins.haxe.haxelib.HaxelibRepositoryLayout;
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.buildtools.NmeProjects;
@@ -237,7 +238,11 @@ public final class HaxeNmeProjectInfoService implements Disposable {
       return null;
     }
 
-    Path hxml = Path.of(buildFilePath);
+    Path hxml = HaxeExternalPaths.pathOf(buildFilePath);
+    if (hxml == null) {
+      log.warn("nme prepare named an unusable build file for " + fileName + ": " + buildFilePath);
+      return null;
+    }
     if (!hxml.isAbsolute() && workDirectory != null) {
       hxml = Path.of(workDirectory).resolve(hxml);
     }

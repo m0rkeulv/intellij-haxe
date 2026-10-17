@@ -5,6 +5,7 @@ import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.io.OSAgnosticPathUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
+import com.intellij.plugins.haxe.util.HaxeExternalPaths;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildsystem.*;
 import org.jetbrains.annotations.NotNull;
@@ -121,9 +122,10 @@ public final class HaxeBuildFileIncludes {
     return null;
   }
 
-  /** The file or folder a project-file path names, resolved against the including file's {@code folder}; null when nothing exists. */
+  /** The file or folder a project-file path names, resolved against the including file's {@code folder}; null when nothing exists or the path is unusable. */
   @Nullable
   public static VirtualFile fileOrFolder(@NotNull VirtualFile folder, @NotNull String path) {
+    if (HaxeExternalPaths.pathOf(path) == null) return null;
     return OSAgnosticPathUtil.isAbsolute(path)
            ? folder.getFileSystem().findFileByPath(path)
            : folder.findFileByRelativePath(path);
