@@ -38,7 +38,7 @@ public final class ProjectXmlParser {
   public static LimeProjectShape parseShape(@NotNull String content) {
     LimeProjectShape.Builder shape = new LimeProjectShape.Builder();
     try {
-      XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
+      XMLStreamReader reader = readerOf(content);
       boolean rootSeen = false;
       while (reader.hasNext()) {
         if (reader.next() != XMLStreamConstants.START_ELEMENT) continue;
@@ -66,7 +66,7 @@ public final class ProjectXmlParser {
     List<String> classpaths = new ArrayList<>();
 
     try {
-      XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
+      XMLStreamReader reader = readerOf(content);
       while (reader.hasNext()) {
         if (reader.next() == XMLStreamConstants.START_ELEMENT) {
           handleElement(reader, defines, libraries, classpaths);
@@ -106,7 +106,7 @@ public final class ProjectXmlParser {
   public static List<String> parseIncludePaths(@NotNull String content) {
     List<String> includes = new ArrayList<>();
     try {
-      XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
+      XMLStreamReader reader = readerOf(content);
       while (reader.hasNext()) {
         if (reader.next() != XMLStreamConstants.START_ELEMENT) continue;
         if (!ProjectXmlVocabulary.INCLUDE_ELEMENT.equals(reader.getLocalName().toLowerCase(Locale.ROOT))) continue;
@@ -126,7 +126,7 @@ public final class ProjectXmlParser {
   @Nullable
   private static String appAttribute(@NotNull String content, @NotNull String attributeName) {
     try {
-      XMLStreamReader reader = createSecureFactory().createXMLStreamReader(new StringReader(content));
+      XMLStreamReader reader = readerOf(content);
       while (reader.hasNext()) {
         if (reader.next() != XMLStreamConstants.START_ELEMENT) continue;
         if (!ProjectXmlVocabulary.APP_ELEMENT.equals(reader.getLocalName().toLowerCase(Locale.ROOT))) continue;
@@ -178,6 +178,13 @@ public final class ProjectXmlParser {
   @Nullable
   private static String attribute(@NotNull XMLStreamReader reader, @NotNull String name) {
     return reader.getAttributeValue(null, name);
+  }
+
+  /** A reader over the text as the tools read it: attribute values may hold a raw {@code <} or {@code &} ({@link ProjectXmlEscaping}). */
+  @NotNull
+  private static XMLStreamReader readerOf(@NotNull String content) throws XMLStreamException {
+    String escaped = ProjectXmlEscaping.escapeAttributeValues(content);
+    return createSecureFactory().createXMLStreamReader(new StringReader(escaped));
   }
 
   @NotNull
