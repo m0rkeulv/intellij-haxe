@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.buildsystem.lime;
 
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.psi.xml.XmlDocument;
 import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
@@ -14,6 +15,19 @@ public class LimeOpenFlUtil {
   public boolean isLimeFamilyFile(@NotNull XmlFile file) {
     LimeProjectShape shape = shapeOf(file);
     return shape != null && shape.isLimeFamily();
+  }
+
+  /**
+   * Whether the file is a library's include file in the Lime dialect: named as
+   * lime looks for it in a library's folder, with a root lime reads, or rooted
+   * in {@code <extension>} with a library or a source path declared.
+   */
+  public boolean isLibraryIncludeFile(@NotNull XmlFile file) {
+    LimeProjectShape shape = shapeOf(file);
+    if (shape == null) return false;
+    return ProjectXmlVocabulary.isLibraryIncludeFileName(file.getName())
+           ? shape.hasToolRoot()
+           : shape.isExtensionInclude();
   }
 
   public boolean isOpenFlFile(@NotNull XmlFile file) {

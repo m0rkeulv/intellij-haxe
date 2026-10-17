@@ -5,6 +5,7 @@ import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -16,6 +17,8 @@ import java.util.Set;
 public final class ProjectXmlVocabulary {
 
   public static final String ROOT_ELEMENT = "project";
+  /** The root a library's include file may carry instead of {@code <project>}; lime reads both alike. */
+  public static final String EXTENSION_ROOT_ELEMENT = "extension";
   /** {@code <haxelib name version>}: a library dependency. */
   public static final String LIBRARY_ELEMENT = "haxelib";
   /** {@code <include path>}: another project file merged into this one; with a {@code haxelib} attribute it names a library's include file instead. */
@@ -31,6 +34,15 @@ public final class ProjectXmlVocabulary {
   /** The elements that also take the legacy {@code name} spelling of their path (historic nmml wrote {@code <classpath name>}). */
   public static final Set<String> LEGACY_NAME_ELEMENTS = Set.of("include", "source", "classpath");
 
+  /** The project files an {@code <include>} naming a folder stands for, in the order lime probes them. */
+  public static final List<String> FOLDER_INCLUDE_FILE_NAMES = List.of("include.lime", "include.nmml", "include.xml");
+  /**
+   * A library's include files, in the order lime probes the library's folder:
+   * the folder's project files, then a project script. Lime merges the first
+   * it finds into the build naming the library and never builds one itself.
+   */
+  public static final List<String> LIBRARY_INCLUDE_FILE_NAMES = List.of("include.lime", "include.nmml", "include.xml", "include.hxp");
+
   public static final String NAME_ATTRIBUTE = "name";
   public static final String PATH_ATTRIBUTE = "path";
   public static final String VALUE_ATTRIBUTE = "value";
@@ -38,6 +50,11 @@ public final class ProjectXmlVocabulary {
   public static final String HAXELIB_ATTRIBUTE = "haxelib";
 
   private ProjectXmlVocabulary() {
+  }
+
+  /** Whether a file of that name is a library's include file, which lime skips when it looks for a project. */
+  public static boolean isLibraryIncludeFileName(@NotNull String fileName) {
+    return LIBRARY_INCLUDE_FILE_NAMES.contains(fileName);
   }
 
   /** Whether the tool substitutes into the path before using it ({@code ${haxelib:x}}, {@code ${define}}); the IDE cannot resolve such a path. */

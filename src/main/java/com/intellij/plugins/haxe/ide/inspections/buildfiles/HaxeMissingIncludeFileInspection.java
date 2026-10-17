@@ -15,8 +15,8 @@ import com.intellij.psi.xml.XmlAttributeValue;
 import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
 
-/// An `<include path>` (legacy `name`) of a Lime, OpenFL or NME project file
-/// naming nothing on disk: the path itself, or a folder without the
+/// An `<include path>` (legacy `name`) of a Lime, OpenFL or NME project file,
+/// or of a library's include file, naming nothing on disk: the path itself, or a folder without the
 /// include.lime / include.nmml / include.xml Lime picks inside it. Paths
 /// resolve against the project file's folder ([HaxeBuildFileIncludes#includeFile]).
 /// A `${...}` path takes Lime's substitution and is not checked;
@@ -26,7 +26,7 @@ public class HaxeMissingIncludeFileInspection extends LocalInspectionTool {
   @Override
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     PsiFile file = holder.getFile();
-    if (!HaxeProjectXmlFiles.isProjectXml(file)) return PsiElementVisitor.EMPTY_VISITOR;
+    if (!HaxeProjectXmlFiles.isProjectOrLibraryIncludeXml(file)) return PsiElementVisitor.EMPTY_VISITOR;
     VirtualFile folder = HaxeProjectXmlFiles.folderOf(file);
     return folder == null ? PsiElementVisitor.EMPTY_VISITOR : new IncludeVisitor(holder, folder);
   }

@@ -13,7 +13,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -33,9 +32,6 @@ import java.util.Set;
  * nothing else.
  */
 public final class HaxeBuildFileIncludes {
-
-  /** A folder include's project file candidates, in lime's probing order. */
-  private static final List<String> FOLDER_INCLUDE_NAMES = List.of("include.lime", "include.nmml", "include.xml");
 
   private HaxeBuildFileIncludes() {
   }
@@ -115,7 +111,7 @@ public final class HaxeBuildFileIncludes {
   public static VirtualFile includeFile(@NotNull VirtualFile folder, @NotNull String path) {
     VirtualFile target = fileOrFolder(folder, path);
     if (target == null || !target.isDirectory()) return target;
-    for (String name : FOLDER_INCLUDE_NAMES) {
+    for (String name : ProjectXmlVocabulary.FOLDER_INCLUDE_FILE_NAMES) {
       VirtualFile candidate = target.findChild(name);
       if (candidate != null && !candidate.isDirectory()) return candidate;
     }

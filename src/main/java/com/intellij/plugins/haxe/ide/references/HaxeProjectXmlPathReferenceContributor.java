@@ -16,7 +16,8 @@ import com.intellij.util.ProcessingContext;
 import org.jetbrains.annotations.NotNull;
 
 
-/// Makes the path attributes of a Lime, OpenFL or NME project file navigable:
+/// Makes the path attributes of a Lime, OpenFL or NME project file, or of a
+/// library's include file, navigable:
 /// `<include path|name>`, `<source path|name>`, `<classpath path|name>`,
 /// `<assets path>`, `<icon path>` and `<template path>` resolve against the
 /// project file's folder, and an `<include>` naming a folder opens the
@@ -43,7 +44,7 @@ public class HaxeProjectXmlPathReferenceContributor extends PsiReferenceContribu
     @Override
     public PsiReference @NotNull [] getReferencesByElement(@NotNull PsiElement element, @NotNull ProcessingContext context) {
       XmlAttributeValue value = (XmlAttributeValue)element;
-      if (!isPathAttribute(value) || !HaxeProjectXmlFiles.isProjectXml(value.getContainingFile())) return PsiReference.EMPTY_ARRAY;
+      if (!isPathAttribute(value) || !HaxeProjectXmlFiles.isProjectOrLibraryIncludeXml(value.getContainingFile())) return PsiReference.EMPTY_ARRAY;
       String path = value.getValue().trim();
       if (path.isEmpty() || ProjectXmlVocabulary.isToolExpanded(path)) return PsiReference.EMPTY_ARRAY;
       return new PsiReference[]{new HaxeProjectXmlPathReference(value, path)};
