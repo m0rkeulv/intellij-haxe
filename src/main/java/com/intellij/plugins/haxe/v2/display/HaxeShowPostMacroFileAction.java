@@ -17,6 +17,7 @@ import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.DisplayCo
 import com.intellij.pom.Navigatable;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.util.OpenSourceUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -46,11 +47,11 @@ public final class HaxeShowPostMacroFileAction extends AnAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
-    Preview preview = ReadAction.compute(() -> previewAt(e));
+    Preview preview = ReadAction.computeBlocking(() -> previewAt(e));
     if (preview == null) return;
     PsiElement target = HaxeGeneratedPreviewTarget.createElement(preview.previewed(), preview.context(), preview.spot());
     Navigatable descriptor = EditSourceUtil.getDescriptor(target);
-    if (descriptor != null) descriptor.navigate(true);
+    if (descriptor != null) OpenSourceUtil.navigate(true, descriptor);
   }
 
   /** The Haxe source the event names when a build macro reaches it and the compiler can serve it; null otherwise. Read action. */

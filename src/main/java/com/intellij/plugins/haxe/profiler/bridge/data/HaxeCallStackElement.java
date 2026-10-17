@@ -24,6 +24,7 @@ import com.intellij.psi.PsiManager;
 import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.util.OpenSourceUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -88,7 +89,7 @@ public final class HaxeCallStackElement extends BaseCallStackElement {
       .inSmartMode(project)
       .coalesceBy(element)
       .finishOnUiThread(ModalityState.defaultModalityState(), descriptor -> {
-        if (descriptor != null) descriptor.navigate(true);
+        if (descriptor != null) OpenSourceUtil.navigate(true, descriptor);
       })
       .submit(AppExecutorUtil.getAppExecutorService());
   }
