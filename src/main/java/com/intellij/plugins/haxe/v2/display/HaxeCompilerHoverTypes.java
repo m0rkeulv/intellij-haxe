@@ -64,9 +64,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * as the compiler reports the smallest expression at the position, which may
  * be a different one than asked for. A stale answer keeps serving until a
  * newer one replaces it, so a declaration never flips back while the file is
- * edited. A compiler error (a build context that does not compile fails every
- * request on it) suspends the file until its text or the build context
- * changes; a transport failure is retried by the next lookup.
+ * edited. A compiler error answers its one declaration with nothing and the
+ * batch goes on, as the compiler fails some positions on their own; only when
+ * the first few requests all fail - as every request on a build context that
+ * does not compile does - is the file suspended until its text or the build
+ * context changes. A transport failure is retried by the next lookup.
  * <p>
  * TODO: a local hovered at its declaration shows the monomorphs still unbound
  * at that point ({@code Array<?>} for {@code var a = []}); the bound type
@@ -118,6 +120,9 @@ public final class HaxeCompilerHoverTypes implements Disposable {
   private record FailureMark(long documentStamp, long inputsStamp) {
   }
 
+  /** Compiler errors without a single answer after which a batch suspends its file. */
+  private static final int ERRORS_BEFORE_SUSPENDING = 3;
+
   private final Project project;
   private final Map<PsiElement, Answer> answers = new ConcurrentHashMap<>();
   private final Map<VirtualFile, FailureMark> failedFiles = new ConcurrentHashMap<>();
@@ -148,9 +153,10 @@ public final class HaxeCompilerHoverTypes implements Disposable {
     executor.shutdownNow();
   }
 
-  /** Whether the hover answers for the declaration: a covered kind without a type tag; a constructor has no type to show. */
+  /** Whether the hover answers for the declaration: a covered kind with a real name and without a type tag; a constructor has no type to show. */
   public static boolean covers(@NotNull PsiElement declaration) {
-    return HaxeTypeHintAnchors.componentNameOf(declaration) != null && !hasTypeTag(declaration) && !isConstructor(declaration);
+    HaxeComponentName name = HaxeTypeHintAnchors.componentNameOf(declaration);
+    return name != null && !isWildcard(name) && !hasTypeTag(declaration) && !isConstructor(declaration);
   }
 
   /** Whether the declaration sits in a function body rather than on the class. */
@@ -227,7 +233,7 @@ public final class HaxeCompilerHoverTypes implements Disposable {
     Document document = PsiDocumentManager.getInstance(project).getDocument(psiFile);
     if (document == null) return null;
     long stamp = document.getModificationStamp();
-    if (isMarkedFailed(file, stamp)) return null;
+    if (isSuspended(file, stamp)) return null;
     DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(file);
     if (context == null) return null;
 
@@ -266,11 +272,9 @@ public final class HaxeCompilerHoverTypes implements Disposable {
   }
 
   /**
-   * Hovers every target of the batch, back-to-back on one connection, and
-   * stores the answers as they come; the number stored. Stops at an edit of
-   * the file (the stored answers stay, the next lookup queues the rest), at
-   * a compiler error (the file is suspended) and when the server is
-   * unavailable (the next lookup retries). Background thread, no read lock.
+   * Hovers every target of the batch back-to-back on one connection
+   * ({@link #hoverEach}); the number of answers stored. Background thread, no
+   * read lock.
    */
   int prefetch(@NotNull Batch batch) {
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
@@ -279,24 +283,68 @@ public final class HaxeCompilerHoverTypes implements Disposable {
     batches.incrementAndGet();
     batchTargets.addAndGet(batch.targets().size());
     String path = batch.file().getPath();
-    int stored = 0;
     try {
       displayService.prepareFile(connected, path, batch.contents());
-      for (Target target : batch.targets()) {
-        if (batch.isStale() || project.isDisposed()) break;
-        int offset = HaxeServerOffsets.serverOffset(target.offset(), target.line(), batch.shiftsByLine());
-        HoverInfo hover = timed(() -> connected.client().hover(connected.args(), path, offset, batch.contents()));
-        answers.put(target.element(), new Answer(batch.documentStamp(), acceptedType(target, hover)));
-        stored++;
-      }
+      return hoverEach(batch, target -> hoverAt(connected, batch, target));
     } catch (DisplayRequestException e) {
       failures.incrementAndGet();
       log.info("display/hover failed for " + path + ": " + e.getMessage());
-      if (e.isCompilerAnswered()) markFailed(batch.file(), batch.documentStamp());
+      if (e.isCompilerAnswered()) markFailed(batch.file(), batch.documentStamp(), e.getMessage());
+      return 0;
     } finally {
       if (log.isDebugEnabled()) log.debug(statsSummary());
     }
+  }
+
+  /**
+   * Hovers the batch's targets in order and stores each answer; the number
+   * stored. A compiler error answers its one target with nothing and the
+   * batch goes on - the compiler fails some positions on their own. When the
+   * first {@value #ERRORS_BEFORE_SUSPENDING} requests all fail, the batch stops
+   * and the file is suspended ({@link #isSuspended}). Stops at an edit of the
+   * file (the stored answers stay, the next lookup queues the rest) and at a
+   * transport failure (the next lookup retries).
+   */
+  int hoverEach(@NotNull Batch batch, @NotNull TargetHover hover) {
+    int stored = 0;
+    int answered = 0;
+    int failed = 0;
+    String lastError = null;
+    for (Target target : batch.targets()) {
+      if (batch.isStale() || project.isDisposed()) break;
+      HoverInfo info = null;
+      try {
+        info = hover.at(target);
+        answered++;
+      } catch (DisplayRequestException e) {
+        failures.incrementAndGet();
+        if (!e.isCompilerAnswered()) {
+          log.info("display/hover failed for " + batch.file().getPath() + ": " + e.getMessage());
+          return stored;
+        }
+        failed++;
+        lastError = e.getMessage();
+        if (log.isDebugEnabled()) log.debug("display/hover failed at " + batch.file().getPath() + ":" + (target.line() + 1) + ": " + lastError);
+      }
+      answers.put(target.element(), new Answer(batch.documentStamp(), acceptedType(target, info)));
+      stored++;
+      if (answered == 0 && failed >= ERRORS_BEFORE_SUSPENDING) break;
+    }
+    if (answered == 0 && lastError != null) markFailed(batch.file(), batch.documentStamp(), lastError);
     return stored;
+  }
+
+  @Nullable
+  private HoverInfo hoverAt(@NotNull Connected connected, @NotNull Batch batch, @NotNull Target target) throws DisplayRequestException {
+    int offset = HaxeServerOffsets.serverOffset(target.offset(), target.line(), batch.shiftsByLine());
+    return timed(() -> connected.client().hover(connected.args(), batch.file().getPath(), offset, batch.contents()));
+  }
+
+  /** One hover request for a target; null when the compiler reports nothing there. */
+  @FunctionalInterface
+  interface TargetHover {
+    @Nullable
+    HoverInfo at(@NotNull Target target) throws DisplayRequestException;
   }
 
   @FunctionalInterface
@@ -328,15 +376,16 @@ public final class HaxeCompilerHoverTypes implements Disposable {
     return hover.type();
   }
 
-  private boolean isMarkedFailed(@NotNull VirtualFile file, long documentStamp) {
+  /** Whether batches on the file wait for a change: its requests failed on this text and build context. */
+  boolean isSuspended(@NotNull VirtualFile file, long documentStamp) {
     FailureMark mark = failedFiles.get(file);
     return mark != null && mark.documentStamp() == documentStamp && mark.inputsStamp() == contextInputsStamp();
   }
 
-  private void markFailed(@NotNull VirtualFile file, long documentStamp) {
+  private void markFailed(@NotNull VirtualFile file, long documentStamp, @NotNull String reason) {
     FailureMark previous = failedFiles.put(file, new FailureMark(documentStamp, contextInputsStamp()));
     if (previous == null || previous.documentStamp() != documentStamp) {
-      log.info("compiler hover types suspended for " + file.getPath() + " until it or its build context changes (a request failed)");
+      log.info("compiler hover types suspended for " + file.getPath() + " until it or its build context changes: " + reason);
     }
   }
 
@@ -373,6 +422,11 @@ public final class HaxeCompilerHoverTypes implements Disposable {
       case HaxeLocalFunctionDeclaration function -> function.getTypeTag() != null;
       default -> false;
     };
+  }
+
+  // a wildcard names nothing to type, and the compiler fails a hover on one in a constructor pattern (EBinop(_))
+  private static boolean isWildcard(@NotNull HaxeComponentName name) {
+    return name.getIdentifier() instanceof HaxeUnnameIdentifier;
   }
 
   private static boolean isConstructor(@NotNull PsiElement declaration) {
