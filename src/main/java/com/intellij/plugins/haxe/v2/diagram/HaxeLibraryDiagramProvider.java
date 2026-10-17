@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.diagram;
 
 import com.intellij.diagram.*;
+import com.intellij.diagram.extras.DiagramExtras;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -19,6 +20,7 @@ public final class HaxeLibraryDiagramProvider extends DiagramProvider<HaxeLibrar
 
   private final HaxeLibraryDiagramElementManager elementManager = new HaxeLibraryDiagramElementManager();
   private final HaxeLibraryDiagramVfsResolver vfsResolver = new HaxeLibraryDiagramVfsResolver();
+  private final HaxeLibraryDiagramExtras extras = new HaxeLibraryDiagramExtras();
 
   public HaxeLibraryDiagramProvider() {
     elementManager.setUmlProvider(this);
@@ -65,6 +67,11 @@ public final class HaxeLibraryDiagramProvider extends DiagramProvider<HaxeLibrar
   @Override
   public @NotNull DiagramVfsResolver<HaxeLibraryDiagramElement> getVfsResolver() {
     return vfsResolver;
+  }
+
+  @Override
+  public @NotNull DiagramExtras<HaxeLibraryDiagramElement> getExtras() {
+    return extras;
   }
 
   /** The edges carry their own relationship; nothing is derived between arbitrary node pairs. */

@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.buildtools.libraries;
 
+import com.intellij.plugins.haxe.haxelib.HaxelibRepositoryLayout;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph.Requirement;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
@@ -23,7 +24,6 @@ import java.util.Map;
 @CustomLog
 final class HaxelibManifest {
 
-  private static final String FILE_NAME = "haxelib.json";
   /** How many directories above a classpath root the manifest may sit: the classPath entry is a short relative path. */
   private static final int ROOT_SEARCH_DEPTH = 4;
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
@@ -37,7 +37,7 @@ final class HaxelibManifest {
     for (String classpath : classpaths) {
       Path directory = Path.of(classpath);
       for (int level = 0; level <= ROOT_SEARCH_DEPTH && directory != null; level++) {
-        Path manifest = directory.resolve(FILE_NAME);
+        Path manifest = directory.resolve(HaxelibRepositoryLayout.MANIFEST_FILE_NAME);
         if (Files.isRegularFile(manifest)) return manifest;
         directory = directory.getParent();
       }

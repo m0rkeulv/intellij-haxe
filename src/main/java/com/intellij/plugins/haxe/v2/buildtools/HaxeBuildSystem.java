@@ -111,6 +111,11 @@ public interface HaxeBuildSystem {
     return haxeArguments;
   }
 
+  /** Whether the build tool merges each library's include file into the project, as a nested project ({@link LimeProjects#libraryIncludeFile}). */
+  default boolean mergesLibraryIncludeFiles() {
+    return false;
+  }
+
   /**
    * The extra compile arguments that make the current selection's output
    * debuggable for the launched debugger (applied by the before-run compile

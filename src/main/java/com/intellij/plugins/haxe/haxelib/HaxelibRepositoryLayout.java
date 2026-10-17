@@ -21,6 +21,10 @@ public final class HaxelibRepositoryLayout {
   public static final String CURRENT_VERSION_FILE_NAME = ".current";
   /** Holds the path of the development checkout that stands in for the library. */
   public static final String DEV_POINTER_FILE_NAME = ".dev";
+  /** The manifest at a library's root: its name, version and the libraries it requires. */
+  public static final String MANIFEST_FILE_NAME = "haxelib.json";
+  /** Compiler arguments at a library's root that haxelib adds to every build using the library. */
+  public static final String EXTRA_PARAMS_FILE_NAME = "extraParams.hxml";
 
   // a release version folder: digit groups joined by commas (4,3,7), optionally
   // followed by a prerelease or build suffix in the same spelling (1,0,0-rc,1)

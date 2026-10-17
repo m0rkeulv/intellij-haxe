@@ -12,6 +12,7 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.buildsystem.ProjectXmlVocabulary;
 import com.intellij.plugins.haxe.config.FrameworkTarget;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.config.LimeTarget;
@@ -105,6 +106,16 @@ public final class LimeProjects {
   /** True for the types the lime tool can build; a plain hxp SCRIPT is not one of them. */
   public static boolean isLimeFamily(@Nullable HaxeBuildFileType type) {
     return type == HaxeBuildFileType.OPENFL || type == HaxeBuildFileType.LIME || type == HaxeBuildFileType.HXP_PROJECT;
+  }
+
+  /** The include file the build tool merges from the library in that folder as a nested project; null when the library ships none. */
+  @Nullable
+  public static VirtualFile libraryIncludeFile(@NotNull VirtualFile libraryRoot) {
+    for (String name : ProjectXmlVocabulary.LIBRARY_INCLUDE_FILE_NAMES) {
+      VirtualFile include = libraryRoot.findChild(name);
+      if (include != null && !include.isDirectory()) return include;
+    }
+    return null;
   }
 
   /** The CLI tool that builds the file: openfl projects go through the openfl wrapper, everything else through lime. */

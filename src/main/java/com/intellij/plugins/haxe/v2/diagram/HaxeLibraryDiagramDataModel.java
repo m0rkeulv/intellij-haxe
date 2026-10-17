@@ -10,15 +10,20 @@ import com.intellij.diagram.DiagramRelationshipInfoAdapter;
 import com.intellij.diagram.presentation.DiagramLineType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.ModificationTracker;
+import com.intellij.plugins.haxe.util.HaxeReadActions;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildsystem.HxmlIncludeTree;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryHierarchy;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
+import com.intellij.plugins.haxe.v2.diagram.HaxeLibraryDiagramElement.Define;
+import com.intellij.plugins.haxe.v2.diagram.HaxeLibraryIncludeFiles.LibraryInclude;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -29,7 +34,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The nodes and edges of one build file's project diagram, rebuilt from the
@@ -37,9 +44,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * arrows to the hxml files it includes, arrows from each file to the
  * libraries its own lines declare (labelled with a pinned version), and from
  * each library to what it requires (labelled with the required version when
- * one is pinned). Rooted at a library instead, the model shows that library
- * and what it requires. {@link HxmlIncludeTree} and
- * {@link HaxeLibraryHierarchy} do the walking, each with its loop guard.
+ * one is pinned). For a build whose tool merges the libraries' include files
+ * (lime, nme), each library gets a dashed arrow to its include file, which
+ * lists the defines the build takes from it and points on to the libraries it
+ * brings in ({@link HaxeLibraryIncludeFiles}). Rooted at a library instead,
+ * the model shows that library and what it requires.
+ * {@link HxmlIncludeTree} and {@link HaxeLibraryHierarchy} do the walking,
+ * each with its loop guard.
  * <p>
  * The graph is empty until the first sync of the session lands, so a diagram
  * built before that asks for a sync. The modification counter moves only
@@ -67,15 +78,19 @@ final class HaxeLibraryDiagramDataModel extends DiagramDataModel<HaxeLibraryDiag
     }
   }
 
-  /** What one refresh reads under the read lock: the root's include tree (null for a library root) and the library walk. */
-  private record Sources(@Nullable HxmlIncludeTree tree, @NotNull HaxeLibraryHierarchy hierarchy) {
+  /** What one refresh reads under the read lock: the root's include tree (null for a library root), the library walk and the libraries' include files. */
+  private record Sources(@Nullable HxmlIncludeTree tree, @NotNull HaxeLibraryHierarchy hierarchy, @NotNull List<LibraryInclude> includes) {
   }
 
   private final @Nullable HaxeLibraryDiagramElement root;
   private final HaxeLibraryGraph graph;
   private final AtomicBoolean syncRequested = new AtomicBoolean();
+  /** The sources a background refresh read for the graph to apply next; null when none is pending. */
+  private final AtomicReference<Sources> prefetchedSources = new AtomicReference<>();
   private final Map<String, HaxeLibraryDiagramNode> nodes = new LinkedHashMap<>();
   private final List<DiagramEdge<HaxeLibraryDiagramElement>> edges = new ArrayList<>();
+  /** By node key: the defines each file's box lists, read with the sources so drawing a box reads no file. */
+  private final Map<String, List<Define>> fileDefines = new LinkedHashMap<>();
 
   HaxeLibraryDiagramDataModel(@NotNull Project project,
                               @NotNull DiagramProvider<HaxeLibraryDiagramElement> provider,
@@ -141,12 +156,33 @@ final class HaxeLibraryDiagramDataModel extends DiagramDataModel<HaxeLibraryDiag
     return element == null ? null : nodes.get(nodeKey(element));
   }
 
+  /**
+   * The defines a file's box lists - a build file's own, or the ones the build
+   * takes from a library's file - or null for a library's box.
+   */
+  @Nullable
+  List<Define> fileDefines(@NotNull HaxeLibraryDiagramElement element) {
+    return fileDefines.get(nodeKey(element));
+  }
+
+  /**
+   * The graph applies a refresh on the EDT, where the file reads behind the
+   * sources are prohibited; this background half of the refresh reads them
+   * first and {@link #refreshDataModel} picks them up.
+   */
+  @Override
+  public @NotNull CompletableFuture<Void> refreshDataModelAsync(@NotNull ProgressIndicator indicator) {
+    if (root != null) prefetchedSources.set(HaxeReadActions.compute(this::sources));
+    return super.refreshDataModelAsync(indicator);
+  }
+
   @Override
   public void refreshDataModel() {
     nodes.clear();
     edges.clear();
+    fileDefines.clear();
     if (root == null) return;
-    Sources sources = ReadAction.compute(this::sources);
+    Sources sources = currentSources();
     HaxeLibraryDiagramNode rootNode = addNode(root);
     for (String library : sources.hierarchy().nodes()) {
       HaxeLibraryDiagramElement element = HaxeLibraryDiagramElement.library(library);
@@ -161,24 +197,56 @@ final class HaxeLibraryDiagramDataModel extends DiagramDataModel<HaxeLibraryDiag
       HaxeLibraryDiagramNode from = nodes.get(nodeKey(HaxeLibraryDiagramElement.library(requirement.from())));
       if (from != null) addLibraryEdge(from, requirement.to(), REQUIRES, requirement.requiredVersion());
     }
+    addLibraryIncludes(sources.includes());
     if (log.isDebugEnabled()) {
       log.debug("project diagram " + root.key() + ": " + nodes.size() + " nodes, " + edges.size() + " edges, synced=" + graph.hasSynced());
     }
     requestSyncIfNeverSynced();
   }
 
+  /** The sources a background refresh read, else read now: the first build runs inside the editor's write action, where file reads are allowed. */
+  @NotNull
+  private Sources currentSources() {
+    Sources prefetched = prefetchedSources.getAndSet(null);
+    return prefetched != null ? prefetched : HaxeReadActions.compute(this::sources);
+  }
+
   @NotNull
   private Sources sources() {
     if (!root.isBuildFile()) {
-      return new Sources(null, HaxeLibraryHierarchy.of(graph, List.of(new HaxeLibDependency(root.key(), null))));
+      return new Sources(null, HaxeLibraryHierarchy.of(graph, List.of(new HaxeLibDependency(root.key(), null))), List.of());
     }
     HxmlIncludeTree tree = HaxeLibraryDiagramSources.treeOf(getProject(), root.key());
     List<HaxeLibDependency> declared = tree == null ? List.of() : tree.declaredLibraries();
-    return new Sources(tree, HaxeLibraryHierarchy.of(graph, declared));
+    HaxeLibraryHierarchy hierarchy = HaxeLibraryHierarchy.of(graph, declared);
+    return new Sources(tree, hierarchy, libraryIncludes(hierarchy));
+  }
+
+  /** The files the build's libraries add to it: extraParams.hxml always, include files when its tool merges them. Read action. */
+  @NotNull
+  private List<LibraryInclude> libraryIncludes(@NotNull HaxeLibraryHierarchy hierarchy) {
+    HaxeBuildFileInfo mergingBuild = HaxeLibraryDiagramSources.mergingBuildInfo(getProject(), root.key());
+    return HaxeLibraryIncludeFiles.walk(hierarchy.nodes(), library -> HaxeLibraryDiagramSources.libraryRoot(graph, library), mergingBuild);
+  }
+
+  /** A dashed arrow from each library to each file it adds to the build, and arrows on to the libraries that file brings in. */
+  private void addLibraryIncludes(@NotNull List<LibraryInclude> includes) {
+    for (LibraryInclude include : includes) {
+      HaxeLibraryDiagramNode libraryNode = nodes.get(nodeKey(HaxeLibraryDiagramElement.library(include.library())));
+      if (libraryNode == null) continue;
+      HaxeLibraryDiagramElement includeElement = HaxeLibraryDiagramElement.buildFile(include.file().getPath());
+      HaxeLibraryDiagramNode includeNode = addNode(includeElement);
+      fileDefines.put(nodeKey(includeElement), definesOf(include.defines()));
+      edges.add(new HaxeLibraryDiagramEdge(libraryNode, includeNode, INCLUDES));
+      for (HaxeLibDependency declared : include.declares()) {
+        addLibraryEdge(includeNode, declared.name(), DECLARES, declared.version());
+      }
+    }
   }
 
   /** Arrows from a file to the libraries its own lines declare, and a node plus a dashed arrow for every file it includes. */
   private void addFileEdges(@NotNull HxmlIncludeTree tree, @NotNull HaxeLibraryDiagramNode fileNode) {
+    fileDefines.put(nodeKey(fileNode.getIdentifyingElement()), definesOf(tree.own().defines()));
     for (HaxeLibDependency declared : tree.own().libraries()) {
       addLibraryEdge(fileNode, declared.name(), DECLARES, declared.version());
     }
@@ -213,6 +281,13 @@ final class HaxeLibraryDiagramDataModel extends DiagramDataModel<HaxeLibraryDiag
     DiagramRelationshipInfo.Label center = label == null ? null : new VersionLabel(label);
     return new DiagramRelationshipInfoAdapter(name, lineType, 1, DiagramRelationshipInfo.NONE, DiagramRelationshipInfo.DELTA,
                                               center, null, null, null, null, null);
+  }
+
+  @NotNull
+  private static List<Define> definesOf(@NotNull List<HaxeDefine> defines) {
+    return defines.stream()
+      .map(define -> new Define(define.name(), define.value()))
+      .toList();
   }
 
   @NotNull
