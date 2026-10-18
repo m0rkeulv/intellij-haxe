@@ -8,6 +8,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildSections;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTestsBuildFileStore;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
@@ -82,5 +83,17 @@ public final class HaxeTestFrameworks {
     });
     String containerRoot = HaxeContainers.containerRootPath(project, containerId);
     return HaxeTestsBuildFileStore.getInstance(project).resolveTestsFiles(containerId, containerRoot, candidates);
+  }
+
+  /** {@link #testsBuildPaths} for build files the caller has not parsed: their selected sections are read here. Read action. */
+  @NotNull
+  public static List<String> testsBuildPathsAmong(@NotNull Project project,
+                                                  @NotNull String containerId,
+                                                  @NotNull List<HaxeBuildFile> buildFiles) {
+    Map<String, List<HaxeBuildFileInfo.HaxeLibDependency>> librariesByPath = new LinkedHashMap<>();
+    for (HaxeBuildFile buildFile : buildFiles) {
+      librariesByPath.put(buildFile.file().getPath(), HaxeBuildSections.inspectSelected(project, buildFile).libraries());
+    }
+    return testsBuildPaths(project, containerId, librariesByPath);
   }
 }

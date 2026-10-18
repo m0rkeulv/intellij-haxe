@@ -12,7 +12,6 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore.CompileCommand;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
-import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
@@ -21,9 +20,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -87,20 +84,12 @@ public final class HaxeCompileCommands {
     if (store.isBuildSkipped(containerId)) return null;
     CompileCommand stored = store.getCompileCommand(containerId);
     if (stored != null) return stored;
-    Map<String, List<HaxeLibDependency>> librariesByPath = librariesByPath(project, containerId);
-    List<String> testsPaths = HaxeTestFrameworks.testsBuildPaths(project, containerId, librariesByPath);
-    return defaultCommand(project, List.copyOf(librariesByPath.keySet()), testsPaths);
-  }
-
-  /** The libraries of each of the container's build files, as its tests builds are told apart by. */
-  @NotNull
-  private static Map<String, List<HaxeLibDependency>> librariesByPath(@NotNull Project project, @NotNull String containerId) {
-    Map<String, List<HaxeLibDependency>> librariesByPath = new LinkedHashMap<>();
-    for (HaxeBuildFile buildFile : HaxeKnownBuildFiles.forContainer(project, containerId)) {
-      List<HaxeLibDependency> libraries = HaxeBuildSections.inspectSelected(project, buildFile).libraries();
-      librariesByPath.put(buildFile.file().getPath(), libraries);
-    }
-    return librariesByPath;
+    List<HaxeBuildFile> buildFiles = HaxeKnownBuildFiles.forContainer(project, containerId);
+    List<String> buildFilePaths = buildFiles.stream()
+      .map(buildFile -> buildFile.file().getPath())
+      .toList();
+    List<String> testsPaths = HaxeTestFrameworks.testsBuildPathsAmong(project, containerId, buildFiles);
+    return defaultCommand(project, buildFilePaths, testsPaths);
   }
 
   /**
