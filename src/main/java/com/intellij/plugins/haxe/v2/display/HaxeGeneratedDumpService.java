@@ -41,14 +41,15 @@ import java.util.stream.Stream;
 @CustomLog
 public final class HaxeGeneratedDumpService {
 
-  private record DumpState(long psiModCount, @NotNull Path targetDumpDir) {
+  private record DumpState(long psiModCount, long sourcesStamp, @NotNull Path targetDumpDir) {
   }
 
   /** What a dump build came to: the per-target dump directory, or the reason there is none, as shown to the user. */
   public sealed interface Outcome permits Dumped, Failed {
   }
 
-  public record Dumped(@NotNull Path targetDumpDir) implements Outcome {
+  /** The per-target dump directory, and the {@link HaxeSavedSourcesStamp} value its dump build started from. */
+  public record Dumped(@NotNull Path targetDumpDir, long sourcesStamp) implements Outcome {
   }
 
   public record Failed(@NotNull String message) implements Outcome {
@@ -85,9 +86,10 @@ public final class HaxeGeneratedDumpService {
   public synchronized Outcome ensureDumps(@NotNull HaxeCompilerDisplayService.DisplayContext context) {
     String contextKey = HaxeCompilerDisplayService.contextKey(context);
     long modCount = PsiModificationTracker.getInstance(project).getModificationCount();
+    long sourcesStamp = HaxeSavedSourcesStamp.getInstance(project).get();
     DumpState cached = states.get(contextKey);
     if (cached != null && cached.psiModCount() == modCount && Files.isDirectory(cached.targetDumpDir())) {
-      return new Dumped(cached.targetDumpDir());
+      return new Dumped(cached.targetDumpDir(), cached.sourcesStamp());
     }
 
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
@@ -125,10 +127,10 @@ public final class HaxeGeneratedDumpService {
         log.info("dump build produced no dump directory under " + dumpRoot);
         return new Failed(HaxeBundle.message("haxe.generated.preview.failed.no.dump.dir"));
       }
-      // modCount sampled BEFORE the compile: an edit made while dumping
+      // both stamps sampled BEFORE the compile: an edit made while dumping
       // invalidates this state on the next lookup instead of being missed
-      states.put(contextKey, new DumpState(modCount, targetDir));
-      return new Dumped(targetDir);
+      states.put(contextKey, new DumpState(modCount, sourcesStamp, targetDir));
+      return new Dumped(targetDir, sourcesStamp);
     } catch (DisplayRequestException e) {
       log.info("dump build failed: " + e.getMessage());
       return new Failed(HaxeBundle.message("haxe.generated.preview.failed.request", e.getMessage()));
