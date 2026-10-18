@@ -18,6 +18,7 @@ import com.intellij.plugins.haxe.model.HaxeProjectModel;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspaths.ExternalClasspath;
+import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiSearchHelper;
@@ -168,6 +169,20 @@ public class HaxeExternalClasspathsTest extends HaxeCodeInsightFixtureTestCase {
 
     boolean inLibrary = ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(getProject()).isInLibrarySource(outside));
     assertTrue(inLibrary, "a folder outside every module becomes a synthetic library");
+  }
+
+  @Test
+  @DisplayName("a package under an outside classpath resolves once published")
+  public void testAPackageUnderAnOutsideClasspathResolvesOncePublished() throws IOException {
+    VirtualFile outside = outsideDirectory("haxe-external-package");
+    createSubdirectory(outside, "extutil");
+    HaxeBuildFile buildFile = hxmlBuild("-cp " + outside.getPath() + "\n-main Main\n");
+    JavaPsiFacade facade = JavaPsiFacade.getInstance(getProject());
+
+    assertNull(ReadAction.computeBlocking(() -> facade.findPackage("extutil")), "no package before the folder is published");
+
+    publish(myFixture.getModule(), buildFile);
+    assertNotNull(ReadAction.computeBlocking(() -> facade.findPackage("extutil")), "the folder's subfolder is a package");
   }
 
   @Test
