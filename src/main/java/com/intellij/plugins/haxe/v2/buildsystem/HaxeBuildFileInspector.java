@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Reads a build file's declared target, defines and library dependencies
@@ -147,14 +148,57 @@ public final class HaxeBuildFileInspector {
     if (psiFile != null) dependencies.add(psiFile);
   }
 
+  /** A top-level line of the root build file: its text and the element it came from. */
+  private record SectionLine(@NotNull String text, @NotNull PsiElement element) {
+  }
+
+  /** The root file's lines by compilation section: the shared {@code --each} block, then the non-empty sections. */
+  private record SectionSplit(@NotNull List<SectionLine> eachBlock, @NotNull List<List<SectionLine>> sections) {
+
+    boolean singleSection() {
+      return sections.size() <= 1 && eachBlock.isEmpty();
+    }
+  }
+
   @NotNull
   private static List<String> splitAndFlatten(@NotNull PsiFile psiFile,
                                               @NotNull VirtualFile buildFile,
                                               @NotNull HxmlFileParser.IncludeReader reader) {
-    List<String> eachBlock = new ArrayList<>();
-    List<String> currentSection = new ArrayList<>();
-    List<List<String>> sectionLines = new ArrayList<>();
-    sectionLines.add(currentSection);
+    SectionSplit split = split(psiFile);
+    if (split.singleSection()) {
+      String content = loadText(buildFile);
+      return content == null ? List.of() : List.of(HxmlFileParser.flatten(content, reader));
+    }
+
+    String sharedPrefix = split.eachBlock().isEmpty() ? "" : joinedText(split.eachBlock()) + "\n";
+    return split.sections().stream()
+      .map(lines -> HxmlFileParser.flatten(sharedPrefix + joinedText(lines), reader))
+      .toList();
+  }
+
+  /**
+   * The index into {@link #sectionContents} of the section a top-level line
+   * of the root build file belongs to, by the same split: 0 in a
+   * single-section file, -1 for a line of the {@code --each} block, which
+   * every section shares. Call inside a read action.
+   */
+  public static int sectionIndexOf(@NotNull PsiFile psiFile, @NotNull PsiElement topLevelLine) {
+    SectionSplit split = split(psiFile);
+    if (split.singleSection()) return 0;
+    if (holds(split.eachBlock(), topLevelLine)) return -1;
+    List<List<SectionLine>> sections = split.sections();
+    for (int index = 0; index < sections.size(); index++) {
+      if (holds(sections.get(index), topLevelLine)) return index;
+    }
+    return 0;
+  }
+
+  @NotNull
+  private static SectionSplit split(@NotNull PsiFile psiFile) {
+    List<SectionLine> eachBlock = new ArrayList<>();
+    List<SectionLine> currentSection = new ArrayList<>();
+    List<List<SectionLine>> sections = new ArrayList<>();
+    sections.add(currentSection);
     for (PsiElement child : psiFile.getChildren()) {
       if (isIgnorableInSection(child)) continue;
       if (child instanceof HXMLProperty property) {
@@ -163,42 +207,40 @@ public final class HaxeBuildFileInspector {
         // first argument
         if (HxmlFileParser.isNextSeparator(key)) {
           currentSection = sectionStartingWith(property.getValue());
-          sectionLines.add(currentSection);
+          sections.add(currentSection);
           continue;
         }
         if (HxmlFileParser.isEachSeparator(key)) {
           eachBlock.addAll(currentSection);
           currentSection.clear();
-          HXMLValue value = property.getValue();
-          if (value != null) {
-            currentSection.add(value.getText());
-          }
+          currentSection.addAll(sectionStartingWith(property.getValue()));
           continue;
         }
       }
-      currentSection.add(child.getText());
+      currentSection.add(new SectionLine(child.getText(), child));
     }
-
-    sectionLines.removeIf(List::isEmpty);
-    boolean singleSection = sectionLines.size() <= 1 && eachBlock.isEmpty();
-    if (singleSection) {
-      String content = loadText(buildFile);
-      return content == null ? List.of() : List.of(HxmlFileParser.flatten(content, reader));
-    }
-
-    String sharedPrefix = eachBlock.isEmpty() ? "" : String.join("\n", eachBlock) + "\n";
-    return sectionLines.stream()
-      .map(lines -> HxmlFileParser.flatten(sharedPrefix + String.join("\n", lines), reader))
-      .toList();
+    sections.removeIf(List::isEmpty);
+    return new SectionSplit(eachBlock, sections);
   }
 
   @NotNull
-  private static List<String> sectionStartingWith(@Nullable HXMLValue value) {
-    List<String> lines = new ArrayList<>();
+  private static List<SectionLine> sectionStartingWith(@Nullable HXMLValue value) {
+    List<SectionLine> lines = new ArrayList<>();
     if (value != null) {
-      lines.add(value.getText());
+      lines.add(new SectionLine(value.getText(), value));
     }
     return lines;
+  }
+
+  @NotNull
+  private static String joinedText(@NotNull List<SectionLine> lines) {
+    return lines.stream()
+      .map(SectionLine::text)
+      .collect(Collectors.joining("\n"));
+  }
+
+  private static boolean holds(@NotNull List<SectionLine> lines, @NotNull PsiElement element) {
+    return lines.stream().anyMatch(line -> line.element() == element);
   }
 
   /** Line breaks and comments carry no compiler arguments. */

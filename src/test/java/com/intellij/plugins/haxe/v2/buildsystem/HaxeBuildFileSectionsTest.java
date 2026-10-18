@@ -5,6 +5,9 @@ import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeCodeInsightFixtureTestCase;
 import com.intellij.plugins.haxe.config.HaxeTarget;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -130,6 +133,32 @@ public class HaxeBuildFileSectionsTest extends HaxeCodeInsightFixtureTestCase {
 
     List<String> sections = HaxeBuildFileInspector.sectionContents(getProject(), root);
     assertEquals(1, sections.size(), "a single real build means a single section");
+  }
+
+  @Test
+  @DisplayName("section index of a line follows the split")
+  public void testSectionIndexOfALineFollowsTheSplit() {
+    VirtualFile root = addHxml("index/build.hxml", """
+      -cp src
+      --each
+      -js bin/app.js
+      --next
+      -hl bin/app.hl
+      """);
+    PsiFile psiFile = PsiManager.getInstance(getProject()).findFile(root);
+    assertNotNull(psiFile);
+
+    assertEquals(-1, HaxeBuildFileInspector.sectionIndexOf(psiFile, lineStartingWith(psiFile, "-cp")),
+                 "the --each block belongs to every section");
+    assertEquals(0, HaxeBuildFileInspector.sectionIndexOf(psiFile, lineStartingWith(psiFile, "-js")));
+    assertEquals(1, HaxeBuildFileInspector.sectionIndexOf(psiFile, lineStartingWith(psiFile, "-hl")));
+  }
+
+  private static PsiElement lineStartingWith(PsiFile psiFile, String prefix) {
+    for (PsiElement child : psiFile.getChildren()) {
+      if (child.getText().startsWith(prefix)) return child;
+    }
+    throw new AssertionError("no line starts with " + prefix);
   }
 
   private VirtualFile addHxml(String relativePath, String content) {
