@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.find.findUsages.FindUsagesHandler;
+import com.intellij.plugins.haxe.HaxeLanguage;
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.ide.HaxeFindUsagesFactoryProxy;
 import com.intellij.plugins.haxe.ide.HaxeFindUsagesHandler;
@@ -8,7 +9,10 @@ import com.intellij.plugins.haxe.ide.HaxeGotoDeclarationProxy;
 import com.intellij.plugins.haxe.lang.psi.HaxeMethodDeclaration;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.testFramework.LightVirtualFile;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -109,12 +113,36 @@ public class HaxeCompilerIdeFeaturesRoutingTest extends HaxeLightFixtureTestCase
     assertTrue(unavailabilityNotified(), "the missing server must be reported");
   }
 
+  @Test
+  @DisplayName("a generated preview is left to the static handlers without a notice")
+  public void testAGeneratedPreviewIsLeftToTheStaticHandlersWithoutANotice() {
+    HaxeCompilerSettings.getInstance(getProject()).setCompilerIdeFeaturesEnabled(true);
+    String previewSource = MAIN_HX_SOURCE.replace("<caret>", "");
+    LightVirtualFile preview = new LightVirtualFile("Main.generated.hx", HaxeLanguage.INSTANCE, previewSource);
+    PsiFile previewFile = PsiManager.getInstance(getProject()).findFile(preview);
+    assertNotNull(previewFile);
+    int offset = previewSource.indexOf("helper();") + 1;
+    PsiElement inPreview = previewFile.findElementAt(offset);
+
+    PsiElement[] targets = new HaxeGotoDeclarationProxy().getGotoDeclarationTargets(inPreview, offset, null);
+    FindUsagesHandler handler =
+      new HaxeFindUsagesFactoryProxy(getProject()).createFindUsagesHandler(helperDeclarationIn(previewFile), false);
+
+    assertNull(targets, "the compiler handler leaves a preview to the platform");
+    assertInstanceOf(HaxeFindUsagesHandler.class, handler, "the IDE's own search answers in a preview");
+    assertFalse(unavailabilityNotified(), "a file outside every build is no missing server");
+  }
+
   private boolean unavailabilityNotified() {
     return HaxeCompilerNotifications.getInstance(getProject()).unavailabilityNotifiedForTests();
   }
 
   private PsiElement helperDeclaration() {
-    return PsiTreeUtil.findChildrenOfType(myFixture.getFile(), HaxeMethodDeclaration.class).stream()
+    return helperDeclarationIn(myFixture.getFile());
+  }
+
+  private static PsiElement helperDeclarationIn(PsiFile file) {
+    return PsiTreeUtil.findChildrenOfType(file, HaxeMethodDeclaration.class).stream()
       .filter(method -> "helper".equals(method.getName()))
       .findFirst()
       .orElseThrow();

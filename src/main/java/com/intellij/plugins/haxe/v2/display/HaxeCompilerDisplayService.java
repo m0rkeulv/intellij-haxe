@@ -1,5 +1,6 @@
 package com.intellij.plugins.haxe.v2.display;
 
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
@@ -648,11 +649,13 @@ public final class HaxeCompilerDisplayService implements Disposable {
     }
   }
 
-  /** The file on disk behind an element; a completion copy maps back to its original. */
+  /**
+   * The file on disk behind an element; a completion copy maps back to its
+   * original, and a light file, such as a generated-code preview, has none.
+   */
   @Nullable
   static VirtualFile physicalFileOf(@NotNull PsiElement element) {
-    PsiFile file = element.getContainingFile();
-    return file != null ? file.getOriginalFile().getVirtualFile() : null;
+    return HaxeDefineContextService.physicalFileOf(element.getContainingFile());
   }
 
   /**
