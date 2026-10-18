@@ -23,6 +23,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -168,6 +169,12 @@ public final class HaxeNmeProjectInfoService implements Disposable {
 
   public void clearCache() {
     cache.clear();
+  }
+
+  /** Blocks until the preparations queued so far have run; their tool runs in the project file's folder. */
+  @TestOnly
+  public void awaitPreparationsForTests() throws Exception {
+    cache.awaitQueuedEvaluations(PREPARE_TIMEOUT_MS);
   }
 
   /** Drops every cached evaluation of one build file (all targets/toolchains), forcing a re-run on the next ask. */

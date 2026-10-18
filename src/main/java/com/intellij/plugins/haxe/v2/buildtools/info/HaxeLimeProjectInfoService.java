@@ -27,6 +27,7 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -144,6 +145,13 @@ public final class HaxeLimeProjectInfoService implements Disposable {
   public void clearCache() {
     cache.clear();
     displayArguments.clear();
+  }
+
+  /** Blocks until the evaluations queued so far have run; their tool runs in the project file's folder. */
+  @TestOnly
+  public void awaitEvaluationsForTests() throws Exception {
+    // one evaluation runs the parser tool, then lime display, each bounded by the timeout
+    cache.awaitQueuedEvaluations(2L * DISPLAY_TIMEOUT_MS);
   }
 
   /** Drops every cached evaluation of one build file (all targets/toolchains) and its display arguments, forcing a re-run on the next ask. */

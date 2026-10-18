@@ -7,12 +7,14 @@ import com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -108,6 +110,12 @@ final class HaxeProjectInfoCache<V> {
   void shutdown() {
     executor.shutdownNow();
     clear();
+  }
+
+  /** Blocks until the evaluations queued so far have run; the executor runs them one at a time, in order. */
+  @TestOnly
+  void awaitQueuedEvaluations(long timeoutMillis) throws Exception {
+    executor.submit(() -> { }).get(timeoutMillis, TimeUnit.MILLISECONDS);
   }
 
   private void schedule(@NotNull Key key,
