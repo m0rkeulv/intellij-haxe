@@ -109,7 +109,7 @@ public final class HaxeBuildClasspaths {
   }
 
   @NotNull
-  private static List<VirtualFile> resolvedDirectories(@NotNull VirtualFile anchor, @NotNull List<String> classpaths) {
+  static List<VirtualFile> resolvedDirectories(@NotNull VirtualFile anchor, @NotNull List<String> classpaths) {
     List<VirtualFile> directories = new ArrayList<>();
     for (String classpath : classpaths) {
       VirtualFile resolved = resolveClasspathEntry(anchor, classpath);
