@@ -90,6 +90,8 @@ public class HaxeFileDefineContextTest extends HaxeCodeInsightFixtureTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
+    // the library sync a project open starts would replace the library defines a test records
+    awaitLibrarySync();
     HaxeDefineContextInvalidator.invalidationObserver = files -> files.forEach(file -> invalidated.add(file.getName()));
   }
 

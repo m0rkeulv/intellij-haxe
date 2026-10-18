@@ -35,6 +35,13 @@ public class HaxeResolveCachesTest extends HaxeCodeInsightFixtureTestCase {
     return "";
   }
 
+  /** The library sync a project open starts would replace the haxelib entries the tests attach. */
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
+    awaitLibrarySync();
+  }
+
   @Test
   @DisplayName("a type stops resolving once its library is removed")
   public void testATypeStopsResolvingOnceItsLibraryIsRemoved() throws IOException {

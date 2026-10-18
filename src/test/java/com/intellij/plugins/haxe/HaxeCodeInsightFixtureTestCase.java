@@ -34,6 +34,7 @@ import com.intellij.plugins.haxe.ide.HaxeInspectionTestTools;
 import com.intellij.plugins.haxe.ide.module.HaxeModuleType;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.util.HaxeTestUtils;
+import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementFactory;
@@ -62,6 +63,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -231,6 +233,17 @@ abstract public class HaxeCodeInsightFixtureTestCase {
 
   protected Module getModule() {
     return myFixture.getModule();
+  }
+
+  /**
+   * Waits until the library syncs requested so far have landed. Opening the
+   * project starts one; a test that records sync results itself waits first,
+   * or that sync replaces them with its own.
+   */
+  protected void awaitLibrarySync() {
+    AtomicBoolean synced = new AtomicBoolean();
+    HaxeLibrarySync.sync(getProject(), () -> synced.set(true));
+    PlatformTestUtil.waitWithEventsDispatching("the library sync must land", synced::get, 30);
   }
 
   /**
