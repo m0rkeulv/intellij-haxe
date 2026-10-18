@@ -68,7 +68,10 @@ public class HaxeRuntimeToolTest {
 
   private Path executableIn(String directory, HaxeRuntimeTool tool) throws IOException {
     Path dir = Files.createDirectories(temp.resolve(directory));
-    return Files.createFile(dir.resolve(tool.executableName()));
+    Path executable = Files.createFile(dir.resolve(tool.executableName()));
+    // a PATH lookup takes only executable files; a new file is one on windows alone
+    executable.toFile().setExecutable(true);
+    return executable;
   }
 
   private static Environment env(Map<String, String> values) {

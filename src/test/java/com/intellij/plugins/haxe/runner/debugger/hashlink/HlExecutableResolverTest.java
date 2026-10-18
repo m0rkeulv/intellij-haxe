@@ -104,6 +104,8 @@ public class HlExecutableResolverTest {
     Path dir = Files.createDirectories(temp.resolve(directory));
     Path exe = dir.resolve(HaxeRuntimeTool.HASHLINK.executableName());
     Files.createFile(exe);
+    // a PATH lookup takes only executable files; a new file is one on windows alone
+    exe.toFile().setExecutable(true);
     return exe;
   }
 
