@@ -40,6 +40,11 @@ public class HaxeEnvironmentStoreTest {
     store.setCompileCommand("mod", null);
     assertFalse(store.hasUserOverrides("mod"));
 
+    store.skipBuild("mod");
+    assertTrue(store.hasUserOverrides("mod"));
+    store.setCompileCommand("mod", null);
+    assertFalse(store.hasUserOverrides("mod"));
+
     store.setUsingCompilationServer("mod", false);
     assertTrue(store.hasUserOverrides("mod"));
     store.setUsingCompilationServer("mod", true);
@@ -82,6 +87,20 @@ public class HaxeEnvironmentStoreTest {
 
     store.setCompileCommand(MODULE, null);
     assertNull(store.getCompileCommand(MODULE));
+  }
+
+  @Test
+  @DisplayName("skipping the build clears the command until one is set")
+  public void skippingTheBuildClearsTheCommandUntilOneIsSet() {
+    HaxeEnvironmentStore store = new HaxeEnvironmentStore();
+    store.setCompileCommand(MODULE, new HaxeEnvironmentStore.CompileCommand("/p/build.hxml", null, "-debug"));
+
+    store.skipBuild(MODULE);
+    assertTrue(store.isBuildSkipped(MODULE));
+    assertNull(store.getCompileCommand(MODULE), "a skipped container has no command");
+
+    store.setCompileCommand(MODULE, null);
+    assertFalse(store.isBuildSkipped(MODULE), "returning to the default builds again");
   }
 
   @Test

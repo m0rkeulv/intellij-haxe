@@ -7,17 +7,23 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.ActionReference;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeActiveBuildFileStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
+import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore.CompileCommand;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeLibDependency;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileScanner;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
+import com.intellij.plugins.haxe.v2.testing.HaxeTestFrameworks;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -42,19 +48,23 @@ public final class HaxeCompileCommands {
   private HaxeCompileCommands() {
   }
 
-  /** Resolves the container's build command; null when unset, the file is gone or the type has no build support. Call in a read action. */
+  /**
+   * Resolves the container's {@link #effectiveCommand build command}; null
+   * when it has none, the file is gone or the type has no build support. Call
+   * in a read action.
+   */
   @Nullable
   public static Resolved resolve(@NotNull Project project, @NotNull String containerId) {
-    HaxeEnvironmentStore.CompileCommand stored = HaxeEnvironmentStore.getInstance(project).getCompileCommand(containerId);
-    if (stored == null) return null;
+    CompileCommand compileCommand = effectiveCommand(project, containerId);
+    if (compileCommand == null) return null;
 
-    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, stored.buildFilePath());
+    HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, compileCommand.buildFilePath());
     if (buildFile == null) return null;
 
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    ActionCommand action = stored.actionName() == null
+    ActionCommand action = compileCommand.actionName() == null
                            ? null
-                           : actionCommand(project, environmentSdk, containerId, buildFile, stored.actionName());
+                           : actionCommand(project, environmentSdk, containerId, buildFile, compileCommand.actionName());
     List<String> base = action != null
                         ? action.command()
                         : HaxeBuildSystem.of(buildFile.type()).defaultCommand(project, environmentSdk, buildFile);
@@ -62,7 +72,67 @@ public final class HaxeCompileCommands {
     if (base.isEmpty()) return null;
 
     String workDirectory = action == null ? null : action.workDirectory();
-    return buildResolved(project, containerId, environmentSdk, buildFile.file(), base, stored.arguments(), workDirectory);
+    return buildResolved(project, containerId, environmentSdk, buildFile.file(), base, compileCommand.arguments(),
+                         workDirectory);
+  }
+
+  /**
+   * The build command the container runs: the one set for it, else its
+   * {@link #defaultCommand default}. Null when it skips building or has no
+   * build file to default to. Call in a read action.
+   */
+  @Nullable
+  public static CompileCommand effectiveCommand(@NotNull Project project, @NotNull String containerId) {
+    HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
+    if (store.isBuildSkipped(containerId)) return null;
+    CompileCommand stored = store.getCompileCommand(containerId);
+    if (stored != null) return stored;
+    Map<String, List<HaxeLibDependency>> librariesByPath = librariesByPath(project, containerId);
+    List<String> testsPaths = HaxeTestFrameworks.testsBuildPaths(project, containerId, librariesByPath);
+    return defaultCommand(project, List.copyOf(librariesByPath.keySet()), testsPaths);
+  }
+
+  /** The libraries of each of the container's build files, as its tests builds are told apart by. */
+  @NotNull
+  private static Map<String, List<HaxeLibDependency>> librariesByPath(@NotNull Project project, @NotNull String containerId) {
+    Map<String, List<HaxeLibDependency>> librariesByPath = new LinkedHashMap<>();
+    for (HaxeBuildFile buildFile : HaxeKnownBuildFiles.forContainer(project, containerId)) {
+      List<HaxeLibDependency> libraries = HaxeBuildSections.inspectSelected(project, buildFile).libraries();
+      librariesByPath.put(buildFile.file().getPath(), libraries);
+    }
+    return librariesByPath;
+  }
+
+  /**
+   * The build command of a container with none set, among its build files
+   * and the tests builds among them: the {@link #defaultBuildFilePath default
+   * build file} with its type's default build action and no extra arguments
+   * ({@code haxe build.hxml}, {@code lime build <selected target>}). Null
+   * when no build file qualifies.
+   */
+  @Nullable
+  public static CompileCommand defaultCommand(@NotNull Project project,
+                                              @NotNull List<String> buildFilePaths,
+                                              @NotNull List<String> testsPaths) {
+    String activePath = HaxeActiveBuildFileStore.getInstance(project).getActiveFilePath();
+    String defaultPath = defaultBuildFilePath(buildFilePaths, testsPaths, activePath);
+    return defaultPath == null ? null : new CompileCommand(defaultPath, null, "");
+  }
+
+  /**
+   * The build file a container builds without a build command: the project's
+   * active build file when it is one of the container's, else the container's
+   * only build file that is not a tests build. Null when neither picks one.
+   */
+  @Nullable
+  static String defaultBuildFilePath(@NotNull List<String> buildFilePaths,
+                                     @NotNull List<String> testsPaths,
+                                     @Nullable String activePath) {
+    if (activePath != null && buildFilePaths.contains(activePath)) return activePath;
+    List<String> builds = buildFilePaths.stream()
+      .filter(path -> !testsPaths.contains(path))
+      .toList();
+    return builds.size() == 1 ? builds.getFirst() : null;
   }
 
   /**

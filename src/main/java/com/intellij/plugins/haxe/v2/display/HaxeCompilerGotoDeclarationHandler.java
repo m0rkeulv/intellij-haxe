@@ -34,12 +34,10 @@ import java.util.List;
  * build macro wraps around an expression. For a generated member the server
  * answers the position the macro gave it, typically the source field it was
  * generated from or the class's {@code @:build}; with the preview off,
- * navigation goes there. A member found in a blueprint needs no build
- * command, because its blueprint already came from the compiler; the server
- * requests do. No targets are returned for a declaration under the caret,
- * where the platform keeps its show-usages behaviour, nor for a file the
- * compiler cannot serve, where the notification is shown and the platform
- * resolves the reference itself.
+ * navigation goes there. No targets are returned for a declaration under
+ * the caret, where the platform keeps its show-usages behaviour, nor for a
+ * file the compiler cannot serve, where the notification is shown and the
+ * platform resolves the reference itself.
  */
 public final class HaxeCompilerGotoDeclarationHandler implements GotoDeclarationHandler {
 

@@ -38,6 +38,16 @@ public final class HaxeKnownBuildFiles {
     return mergeWithStore(project, module.getName(), HaxeBuildFileScanner.scan(module));
   }
 
+  /** A container's known build files: a module's, or the project root's. Call inside a read action. */
+  @NotNull
+  public static List<HaxeBuildFile> forContainer(@NotNull Project project, @NotNull String containerId) {
+    if (HaxeContainers.PROJECT_ROOT_CONTAINER.equals(containerId)) {
+      return mergeWithStore(project, containerId, HaxeBuildFileScanner.scanProjectRoot(project));
+    }
+    Module module = ModuleManager.getInstance(project).findModuleByName(containerId);
+    return module == null ? List.of() : forModule(project, module);
+  }
+
   /** Every known build file in the project: all module containers plus the project root. Call inside a read action. */
   @NotNull
   public static List<HaxeBuildFile> all(@NotNull Project project) {
@@ -47,8 +57,7 @@ public final class HaxeKnownBuildFiles {
         byPath.putIfAbsent(buildFile.file().getPath(), buildFile);
       }
     }
-    List<HaxeBuildFile> projectRootFiles =
-      mergeWithStore(project, HaxeContainers.PROJECT_ROOT_CONTAINER, HaxeBuildFileScanner.scanProjectRoot(project));
+    List<HaxeBuildFile> projectRootFiles = forContainer(project, HaxeContainers.PROJECT_ROOT_CONTAINER);
     for (HaxeBuildFile buildFile : projectRootFiles) {
       byPath.putIfAbsent(buildFile.file().getPath(), buildFile);
     }

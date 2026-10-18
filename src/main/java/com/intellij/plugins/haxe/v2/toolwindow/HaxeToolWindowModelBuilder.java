@@ -109,10 +109,10 @@ final class HaxeToolWindowModelBuilder {
 
     List<ContainerEntry> containers = new ArrayList<>();
     for (RawContainer raw : rawContainers) {
-      EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files());
+      List<String> testsPaths = resolveTestsPaths(raw);
+      EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files(), testsPaths);
       EnvironmentData environment = buildEnvironmentData(raw.id());
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
-      List<String> testsPaths = resolveTestsPaths(raw);
       List<String> markedTestsPaths = HaxeTestsBuildFileStore.getInstance(project).getTestsFilePaths(raw.id());
       List<ToolNode> tools = containerTools(raw);
       boolean userConfigured = hasUserConfiguration(raw.id());
@@ -352,41 +352,55 @@ final class HaxeToolWindowModelBuilder {
   }
 
   /**
-   * The container's Compile command row: the chosen file's default build action (or a
-   * designated action of that file as override) plus extra arguments.
+   * The container's Build command row: the chosen file's default build action (or a
+   * designated action of that file as override) plus extra arguments. Without a
+   * command set, the row shows the container's default command, marked as such.
    */
   @NotNull
-  private EnvCompileCommandNode compileCommandNode(@NotNull String containerId, @NotNull List<FileEntry> files) {
+  private EnvCompileCommandNode compileCommandNode(@NotNull String containerId,
+                                                   @NotNull List<FileEntry> files,
+                                                   @NotNull List<String> testsPaths) {
     List<String> candidatePaths = files.stream()
       .map(entry -> entry.buildFile().file().getPath())
       .toList();
     Map<String, List<String>> actionNamesByFile = files.stream()
       .collect(Collectors.toMap(entry -> entry.buildFile().file().getPath(), HaxeToolWindowModelBuilder::actionNames));
 
-    HaxeEnvironmentStore.CompileCommand stored = HaxeEnvironmentStore.getInstance(project).getCompileCommand(containerId);
-    FileEntry chosen = chosenEntry(files, stored);
+    HaxeEnvironmentStore store = HaxeEnvironmentStore.getInstance(project);
+    boolean skipped = store.isBuildSkipped(containerId);
+    HaxeEnvironmentStore.CompileCommand stored = store.getCompileCommand(containerId);
+    HaxeEnvironmentStore.CompileCommand defaultCommand =
+      HaxeCompileCommands.defaultCommand(project, candidatePaths, testsPaths);
+    String defaultPath = defaultCommand == null ? null : defaultCommand.buildFilePath();
+    HaxeEnvironmentStore.CompileCommand compileCommand = stored != null ? stored : defaultCommand;
+    FileEntry chosen = skipped ? null : chosenEntry(files, compileCommand);
     if (chosen == null) {
-      String notSet = HaxeBundle.message("haxe.toolwindow.compile.command.not.set");
-      return new EnvCompileCommandNode(containerId, notSet, null, null, candidatePaths, actionNamesByFile, false);
+      String unset = skipped
+                     ? HaxeBundle.message("haxe.toolwindow.compile.command.skipped")
+                     : HaxeBundle.message("haxe.toolwindow.compile.command.not.set");
+      return new EnvCompileCommandNode(containerId, unset, null, null, candidatePaths, actionNamesByFile, defaultPath,
+                                       false);
     }
 
     HaxeBuildFile buildFile = chosen.buildFile();
-    ActionNode baseAction = resolveBaseAction(chosen, stored, buildFile);
+    ActionNode baseAction = resolveBaseAction(chosen, compileCommand, buildFile);
     if (baseAction == null || baseAction.command().isEmpty()) {
       String unsupported = HaxeBundle.message("haxe.toolwindow.compile.command.unsupported", buildFile.file().getName());
-      return new EnvCompileCommandNode(containerId, unsupported, null, null, candidatePaths, actionNamesByFile, false);
+      return new EnvCompileCommandNode(containerId, unsupported, null, null, candidatePaths, actionNamesByFile, defaultPath,
+                                       false);
     }
 
     List<String> command = new ArrayList<>(baseAction.command());
-    command.addAll(ParametersListUtil.parse(stored.arguments()));
-    String display = StringUtil.trimTrailing(baseAction.presentableCommand() + " " + stored.arguments());
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
+    command.addAll(ParametersListUtil.parse(compileCommand.arguments()));
+    String display = StringUtil.trimTrailing(baseAction.presentableCommand() + " " + compileCommand.arguments());
+    String shown = stored == null ? HaxeBundle.message("haxe.toolwindow.compile.command.default", display) : display;
+    String environmentSdk = store.getSdkName(containerId);
     boolean connectEligible = HaxeCompileCommands.connectEligible(project, environmentSdk, command, buildFile.file());
-    return new EnvCompileCommandNode(containerId, display, command, baseAction.workDirectory(), candidatePaths,
-                                     actionNamesByFile, connectEligible);
+    return new EnvCompileCommandNode(containerId, shown, command, baseAction.workDirectory(), candidatePaths,
+                                     actionNamesByFile, defaultPath, connectEligible);
   }
 
-  /// The entry the stored compile command points at; null when unset or no longer scanned.
+  /// The entry the compile command points at; null when there is none or its file is no longer scanned.
   private static FileEntry chosenEntry(List<FileEntry> files, @Nullable HaxeEnvironmentStore.CompileCommand stored) {
     if (stored == null) return null;
     return files.stream()
