@@ -9,6 +9,8 @@ import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
 import com.intellij.plugins.haxe.config.HaxeTarget;
 import com.intellij.plugins.haxe.util.HaxeSdkUtilBase;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeCompileCommands;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
+import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeSectionSelectionStore;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeTargetSelectionStore;
@@ -59,6 +61,10 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
       // the shared light project keeps service state between tests
       HaxeTargetSelectionStore.getInstance(getProject()).loadState(new HaxeTargetSelectionStore.State());
       HaxeSectionSelectionStore.getInstance(getProject()).loadState(new HaxeSectionSelectionStore.State());
+      // planning a lime or nme launch schedules an evaluation whose tool runs in the fixture
+      // folder, and windows does not delete a folder a live process works in
+      HaxeLimeProjectInfoService.getInstance(getProject()).awaitEvaluationsForTests();
+      HaxeNmeProjectInfoService.getInstance(getProject()).awaitPreparationsForTests();
       NioFiles.deleteRecursively(fixturesRoot);
     }
     finally {
