@@ -64,6 +64,13 @@ public class HaxeResolveContextsTest extends HaxeCodeInsightFixtureTestCase {
     return "";
   }
 
+  /** The library sync a project open starts would replace the haxelib entries the tests attach. */
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
+    awaitLibrarySync();
+  }
+
   @Test
   @DisplayName("the most specific source directory owns a file")
   public void testTheMostSpecificSourceDirectoryOwnsAFile() {
