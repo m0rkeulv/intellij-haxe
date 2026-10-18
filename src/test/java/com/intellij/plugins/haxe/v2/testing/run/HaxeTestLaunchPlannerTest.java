@@ -122,11 +122,11 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     assertTrue(plan.singleStage(), "the interp single run compiles-and-runs as one process");
     assertFalse(command.contains("test.hxml"), "the build file reference is replaced by its expanded section");
     assertFalse(command.contains("TestMain"), "the build's own main is stripped: " + command);
-    int mainFlag = command.indexOf("--main");
+    int mainFlag = command.indexOf(HaxeTestSingleRuns.MAIN_FLAG);
     assertEquals(HaxeTestSingleRuns.MAIN_CLASS, command.get(mainFlag + 1), "the generated main takes over");
-    assertEquals(mainFlag, command.lastIndexOf("--main"), "exactly one main flag survives");
+    assertEquals(mainFlag, command.lastIndexOf(HaxeTestSingleRuns.MAIN_FLAG), "exactly one main flag survives");
 
-    String generatedRoot = command.get(command.indexOf("--main") - 1);
+    String generatedRoot = command.get(mainFlag - 1);
     Path generatedMain = Path.of(generatedRoot, HaxeTestSingleRuns.MAIN_CLASS + ".hx");
     assertTrue(Files.isRegularFile(generatedMain), "generated main written: " + generatedMain);
     String source = Files.readString(generatedMain);

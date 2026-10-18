@@ -334,7 +334,8 @@ abstract public class HaxeCodeInsightFixtureTestCase {
 
   /** Whether a haxe compiler is on the PATH - the gate live tests check via assumeTrue before compiling anything. */
   public static boolean haxeAvailable() {
-    return toolAvailable("haxe", "--version");
+    // -version, not --version: haxe 3.x knows only the single-dash form, and haxe 5 still accepts it
+    return toolAvailable("haxe", "-version");
   }
 
   /** Whether the utest haxelib is installed - the gate for live tests compiling against real utest. */
