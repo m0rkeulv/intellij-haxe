@@ -8,10 +8,6 @@ import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.vfs.VirtualFileManager;
-import com.intellij.openapi.vfs.newvfs.BulkFileListener;
-import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
-import com.intellij.plugins.haxe.HaxeFileType;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
 import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
@@ -31,7 +27,6 @@ import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.DisplayCo
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerHoverTypes.Scope;
 import com.intellij.psi.PsiElement;
 import com.intellij.util.concurrency.AppExecutorUtil;
-import com.intellij.util.containers.ContainerUtil;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,7 +40,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The compilation server as the only source of type inlays. Field, parameter
@@ -88,21 +82,11 @@ public final class HaxeCompilerInlayService implements Disposable {
   private final Map<String, ContextMembers> membersByContext = new ConcurrentHashMap<>();
   private final Map<String, FailedState> failedContexts = new ConcurrentHashMap<>();
   private final Set<String> queuedContexts = ConcurrentHashMap.newKeySet();
-  /** Moves when a Haxe source on disk changes: the member answers describe older files then. */
-  private final AtomicLong savedStamp = new AtomicLong();
   private final ExecutorService executor = AppExecutorUtil.createBoundedApplicationPoolExecutor("Haxe compiler inlays", 1);
   @Nullable private volatile Map<String, String> testTypeTexts;
 
   public HaxeCompilerInlayService(@NotNull Project project) {
     this.project = project;
-    project.getMessageBus().connect(this).subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
-      @Override
-      public void after(@NotNull List<? extends VFileEvent> events) {
-        if (ContainerUtil.exists(events, HaxeCompilerInlayService::isHaxeSourceChange)) {
-          savedStamp.incrementAndGet();
-        }
-      }
-    });
   }
 
   public static HaxeCompilerInlayService getInstance(@NotNull Project project) {
@@ -186,14 +170,14 @@ public final class HaxeCompilerInlayService implements Disposable {
   }
 
   private boolean isStale(@NotNull ContextMembers known) {
-    return known.buildStamp() != buildInputsStamp() || known.savedStamp() != savedStamp.get();
+    return known.buildStamp() != buildInputsStamp() || known.savedStamp() != savedSourcesStamp();
   }
 
   private void queueRefresh(@NotNull String key, @NotNull DisplayContext context) {
     // fixture tests have no server to ask; never spawn the attempt
     if (ApplicationManager.getApplication().isUnitTestMode()) return;
     FailedState failed = failedContexts.get(key);
-    if (failed != null && failed.buildStamp() == buildInputsStamp() && failed.savedStamp() == savedStamp.get()) return;
+    if (failed != null && failed.buildStamp() == buildInputsStamp() && failed.savedStamp() == savedSourcesStamp()) return;
     if (!queuedContexts.add(key)) return;
     executor.execute(() -> runRefresh(key, context));
   }
@@ -214,7 +198,7 @@ public final class HaxeCompilerInlayService implements Disposable {
   private boolean refresh(@NotNull String key, @NotNull DisplayContext context) {
     // read BEFORE the request: a change during it leaves the answer stale-stamped
     long buildStamp = buildInputsStamp();
-    long saved = savedStamp.get();
+    long saved = savedSourcesStamp();
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
     Connected connected = displayService.connectFor(context, DisplayMethods.COMPILED_TYPES);
     if (connected == null) return false;
@@ -243,6 +227,11 @@ public final class HaxeCompilerInlayService implements Disposable {
     return HaxeCompilerDisplayService.getInstance(project).buildInputsStamp();
   }
 
+  /** Moves when a Haxe source on disk changes: the member answers describe older files then. */
+  private long savedSourcesStamp() {
+    return HaxeSavedSourcesStamp.getInstance(project).get();
+  }
+
   /** The directory the compile runs in (every {@code --cwd} composed), which relative file positions are from; the project directory without one. */
   @NotNull
   private String workDirectoryOf(@NotNull List<String> args) {
@@ -263,11 +252,6 @@ public final class HaxeCompilerInlayService implements Disposable {
   }
 
   /** A saved, created, deleted or externally changed Haxe source: a compile reads it differently now. */
-  private static boolean isHaxeSourceChange(@NotNull VFileEvent event) {
-    VirtualFile file = event.getFile();
-    return file != null && HaxeFileType.INSTANCE.getDefaultExtension().equals(file.getExtension());
-  }
-
   @Nullable
   private static String nameOf(@NotNull PsiElement declaration) {
     HaxeComponentName name = HaxeTypeHintAnchors.componentNameOf(declaration);

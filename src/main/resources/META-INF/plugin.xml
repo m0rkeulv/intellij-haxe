@@ -78,6 +78,7 @@
     <moduleType id="HAXE_MODULE" implementationClass="com.intellij.plugins.haxe.ide.module.HaxeModuleType"/>
     <projectSdkSetupValidator id="haxeSdk" implementation="com.intellij.plugins.haxe.codeInsight.daemon.HaxeProjectSdkSetupValidator"/>
     <editorNotificationProvider implementation="com.intellij.plugins.haxe.v2.editor.HaxeBuildToolFailureNotificationProvider"/>
+    <editorNotificationProvider implementation="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewStaleNotificationProvider"/>
     <statusBarWidgetFactory id="HaxeResolveContext" implementation="com.intellij.plugins.haxe.v2.editor.HaxeResolveContextWidgetFactory"
                             order="after encodingWidget"/>
     <sdkFinder implementation="com.intellij.plugins.haxe.haxelib.HaxeSdkFinder"/>
@@ -1006,6 +1007,8 @@
               topic="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener"/>
     <listener class="com.intellij.plugins.haxe.v2.editor.HaxeBuildToolFailureBannerRefresh"
               topic="com.intellij.plugins.haxe.v2.buildtools.HaxeBuildEventListener"/>
+    <listener class="com.intellij.plugins.haxe.v2.display.HaxeGeneratedPreviewStaleRefresh"
+              topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
     <listener class="com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildFileMoveTracker"
               topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
     <listener class="com.intellij.plugins.haxe.v2.runconfig.HaxeRunConfigurationBuildFileTracker"
