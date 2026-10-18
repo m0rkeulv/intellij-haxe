@@ -3,10 +3,12 @@ package com.intellij.plugins.haxe.v2.buildtools.classpaths;
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.RootsChangeRescanningInfo;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ex.ProjectRootManagerEx;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -110,7 +112,21 @@ public final class HaxeExternalClasspathStore {
     Runnable noModelEdit = () -> {};
     ProjectRootManagerEx rootManager = ProjectRootManagerEx.getInstanceEx(project);
     WriteAction.run(() -> rootManager.makeRootsChange(noModelEdit, RootsChangeRescanningInfo.RESCAN_DEPENDENCIES_IF_NEEDED));
+    readSyntheticLibraries();
     PsiManager.getInstance(project).dropPsiCaches();
     DaemonCodeAnalyzer.getInstance(project).restart("haxe: external classpaths changed");
+  }
+
+  /**
+   * The file index reads the synthetic libraries again on its next file
+   * query, but its package lookups do not wait for that: one asked first
+   * caches the old package roots until the next roots change. A file query
+   * right after the change makes the package of an outside folder resolve.
+   */
+  private void readSyntheticLibraries() {
+    List<VirtualFile> outsideDirectories = outsideModuleDirectories();
+    if (outsideDirectories.isEmpty()) return;
+    ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
+    ReadAction.computeBlocking(() -> fileIndex.isInLibrary(outsideDirectories.getFirst()));
   }
 }
