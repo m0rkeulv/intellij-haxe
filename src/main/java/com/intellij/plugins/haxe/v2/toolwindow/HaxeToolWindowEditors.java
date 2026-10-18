@@ -137,13 +137,19 @@ public final class HaxeToolWindowEditors {
     HaxeIdeOverridesStore.getInstance(project).setCustomTarget(buildFilePath, entered);
   }
 
-  /** Opens the compile command configuration dialog; OK applies the command. */
+  /** Opens the compile command configuration dialog; OK applies the command, the default or skipping the build. */
   public static void configureCompileCommand(@NotNull Project project, @NotNull EnvCompileCommandNode compileCommand) {
-    HaxeCompileCommandDialog dialog = new HaxeCompileCommandDialog(project, compileCommand.containerId(),
+    String containerId = compileCommand.containerId();
+    HaxeCompileCommandDialog dialog = new HaxeCompileCommandDialog(project, containerId,
                                                                    compileCommand.candidateFilePaths(),
-                                                                   compileCommand.actionNamesByFile());
-    if (dialog.showAndGet()) {
-      applyCompileCommand(project, compileCommand.containerId(), dialog.selectedCompileCommand());
+                                                                   compileCommand.actionNamesByFile(),
+                                                                   compileCommand.defaultFilePath());
+    if (!dialog.showAndGet()) return;
+    if (dialog.isSkipSelected()) {
+      HaxeEnvironmentStore.getInstance(project).skipBuild(containerId);
+    }
+    else {
+      applyCompileCommand(project, containerId, dialog.selectedCompileCommand());
     }
   }
 

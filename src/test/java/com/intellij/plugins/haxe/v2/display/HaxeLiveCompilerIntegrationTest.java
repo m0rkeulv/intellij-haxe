@@ -66,8 +66,8 @@ public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestC
     myFixture.copyFileToProject("Settings.hx");
     myFixture.copyFileToProject("AccessorMacro.hx");
 
-    // the module's Build command supplies the display context (same wiring the
-    // tool window's Compile command row writes)
+    // the module's Build command as the tool window's row writes it; the
+    // compiler features work without one too (see the test that clears it)
     String containerId = myFixture.getModule().getName();
     HaxeEnvironmentStore.CompileCommand command =
       new HaxeEnvironmentStore.CompileCommand(buildFile.getPath(), null, "");

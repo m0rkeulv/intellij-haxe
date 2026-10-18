@@ -499,10 +499,11 @@ public final class HaxeToolWindowNodes {
   }
 
   /**
-   * "Compile command" row: what compiling this container runs.
-   * {@code command} is null while unconfigured (or the file is gone). Candidates
-   * feed the configure dialog: the container's build file paths and, per file,
-   * the action names available as command overrides.
+   * "Build command" row: what building this container runs.
+   * {@code command} is null while there is none (or the file is gone). Candidates
+   * feed the configure dialog: the container's build file paths, per file the
+   * action names available as command overrides, and the file the container
+   * builds without a command set.
    */
   public record EnvCompileCommandNode(@NotNull String containerId,
                                       @NotNull String display,
@@ -510,6 +511,7 @@ public final class HaxeToolWindowNodes {
                                       @Nullable String workDirectory,
                                       @NotNull List<String> candidateFilePaths,
                                       @NotNull Map<String, List<String>> actionNamesByFile,
+                                      @Nullable String defaultFilePath,
                                       boolean connectEligible) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {

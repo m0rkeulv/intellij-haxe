@@ -45,6 +45,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     public String compileFilePath;
     public String compileActionName;
     public String compileArguments = "";
+    public boolean skipBuild;
     public boolean useCompilationServer = true;
   }
 
@@ -94,6 +95,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     if (environment == null) return false;
     return StringUtil.isNotEmpty(environment.sdkName)
            || StringUtil.isNotEmpty(environment.compileFilePath)
+           || environment.skipBuild
            || !environment.useCompilationServer;
   }
 
@@ -127,7 +129,7 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
     return changed;
   }
 
-  /** The container's compile command, or null when unset (the container is skipped on project build). */
+  /** The build command set for the container; null when none is set, so it builds its default or skips building. */
   @Nullable
   public CompileCommand getCompileCommand(@NotNull String containerId) {
     ContainerEnvironment environment = find(containerId);
@@ -137,11 +139,29 @@ public final class HaxeEnvironmentStore implements PersistentStateComponent<Haxe
                               StringUtil.notNullize(environment.compileArguments));
   }
 
+  /** Sets the container's build command; null returns it to its default. Either way the container builds again. */
   public void setCompileCommand(@NotNull String containerId, @Nullable CompileCommand compileCommand) {
     ContainerEnvironment environment = getOrCreate(containerId);
     environment.compileFilePath = compileCommand == null ? null : compileCommand.buildFilePath();
     environment.compileActionName = compileCommand == null ? null : compileCommand.actionName();
     environment.compileArguments = compileCommand == null ? "" : compileCommand.arguments();
+    environment.skipBuild = false;
+    HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.COMPILE_COMMAND);
+  }
+
+  /** Whether Build Project skips the container, whatever build files it has. */
+  public boolean isBuildSkipped(@NotNull String containerId) {
+    ContainerEnvironment environment = find(containerId);
+    return environment != null && environment.skipBuild;
+  }
+
+  /** Makes Build Project skip the container and clears its build command. */
+  public void skipBuild(@NotNull String containerId) {
+    ContainerEnvironment environment = getOrCreate(containerId);
+    environment.compileFilePath = null;
+    environment.compileActionName = null;
+    environment.compileArguments = "";
+    environment.skipBuild = true;
     HaxeBuildSettingsListener.publisher(project).environmentChanged(containerId, EnvironmentAspect.COMPILE_COMMAND);
   }
 
