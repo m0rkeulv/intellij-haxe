@@ -401,10 +401,20 @@ public final class LimeProjects {
     return platformTarget.equals("mac") ? "macos" : platformTarget;
   }
 
-  /** The launcher a desktop build leaves in its bin: the executable inside the .app bundle on mac, {@code <app file>[.exe]} elsewhere. */
+  /**
+   * The launcher a build leaves in its bin, named for the TARGET platform:
+   * {@code <app file>.exe} for windows, {@code <app file>} for linux, the
+   * executable inside the .app bundle for mac. Neko and HL package a renamed
+   * copy of the host runtime, so they take the host's executable suffix.
+   */
   @NotNull
   private static String packagedLauncher(@NotNull String platformTarget, @NotNull String appFile) {
-    return platformTarget.equals("mac") ? macBundleExecutable(appFile) : HaxeSdkUtilBase.getExecutableName(appFile);
+    return switch (platformTarget) {
+      case "windows" -> appFile + ".exe";
+      case "linux" -> appFile;
+      case "mac" -> macBundleExecutable(appFile);
+      default -> HaxeSdkUtilBase.getExecutableName(appFile);
+    };
   }
 
   /** The executable inside the {@code .app} bundle a mac build packages - the bundle itself is a directory, not a launchable file. */
@@ -450,12 +460,9 @@ public final class LimeProjects {
       // air: the descriptor (application.xml) sits at the target root with the content swf in bin beside it
       case "flash", "air" -> targetRoot + "/bin/" + appFile + ".swf";
       // desktop: lime copies the built executable into bin, named after
-      // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe)
-      case "windows" -> targetRoot + "/bin/" + appFile + ".exe";
-      case "linux" -> targetRoot + "/bin/" + appFile;
-      case "mac" -> targetRoot + "/bin/" + macBundleExecutable(appFile);
-      // neko is wrapped in a launcher executable named after the app, host-suffixed
-      case "neko" -> targetRoot + "/bin/" + HaxeSdkUtilBase.getExecutableName(appFile);
+      // <app file>, independent of -debug (unlike raw hxcpp's Main-debug.exe);
+      // neko is wrapped in a launcher executable named after the app
+      case "windows", "linux", "mac", "neko" -> targetRoot + "/bin/" + packagedLauncher(platformTarget, appFile);
       default -> null;
     };
   }
