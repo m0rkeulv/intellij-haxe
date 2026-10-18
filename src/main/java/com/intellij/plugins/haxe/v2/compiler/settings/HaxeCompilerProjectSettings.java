@@ -40,7 +40,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
     public boolean compilerFeatureNavigation = true;
     public boolean compilerFeatureGeneratedMemberPreview = true;
     public boolean compilerFeatureCompletion = true;
-    public String displayConnectionMode = HaxeDisplayConnectionMode.SHARED_SERVER.getId();
+    public String displayConnectionMode = HaxeDisplayConnectionMode.DEFAULT.getId();
   }
 
   private final @Nullable Project project;

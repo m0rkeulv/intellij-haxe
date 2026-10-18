@@ -11,11 +11,15 @@ import org.jetbrains.annotations.Nullable;
  * a dedicated {@code --server-connect} display process per SDK that keeps
  * one framed connection open. The dedicated process answers without the
  * shared server's per-connection delay and keeps IDE traffic off the build
- * server, at the price of a second haxe process with its own module cache.
+ * server, at the price of a second haxe process with its own module cache;
+ * it is the default.
  */
 public enum HaxeDisplayConnectionMode {
   SHARED_SERVER("shared", "haxe.compiler.display.connection.shared"),
   DEDICATED_PROCESS("dedicated", "haxe.compiler.display.connection.dedicated");
+
+  /** The mode of a project that never chose one. */
+  public static final HaxeDisplayConnectionMode DEFAULT = DEDICATED_PROCESS;
 
   private final String id;
   private final String presentableKey;
@@ -41,6 +45,6 @@ public enum HaxeDisplayConnectionMode {
     for (HaxeDisplayConnectionMode mode : values()) {
       if (mode.id.equals(id)) return mode;
     }
-    return SHARED_SERVER;
+    return DEFAULT;
   }
 }

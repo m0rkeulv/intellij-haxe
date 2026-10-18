@@ -3,12 +3,14 @@ package com.intellij.plugins.haxe.v2.buildtools.server;
 import com.intellij.execution.ExecutionException;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.FramedDisplayChannel;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,6 +19,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.List;
 
 /// Runs one dedicated haxe display process per SDK in `--server-connect`
@@ -43,6 +46,8 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
   /** Distinguishes a display process's id from the shared server's, which is the bare executable path. */
   private static final String ID_SUFFIX = "#display";
   private static final int ACCEPT_TIMEOUT_MS = 15_000;
+  /** How often the wait for the connection checks that the process still runs. */
+  private static final int ACCEPT_POLL_MS = 200;
   private static final long START_FAILURE_COOLDOWN_MS = 10_000;
 
   /** A server process plus the connection it opened to the IDE; alive only while that connection works. */
@@ -57,6 +62,11 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     @Override
     boolean isAlive() {
       return super.isAlive() && channel != null && !channel.isBroken();
+    }
+
+    /** Whether the process runs, connected or not. */
+    boolean isRunning() {
+      return super.isAlive();
     }
   }
 
@@ -76,13 +86,14 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
 
   /**
    * The channel to the SDK's display process, started when needed. Null when
-   * the compilation server is disabled, the project is not trusted, or a
-   * start failed within the cooldown. Background threads only: a start waits
-   * for the process to connect.
+   * the compilation server is disabled, the project is not trusted, the SDK's
+   * haxe has no {@code --server-connect}, or a start failed within the
+   * cooldown. Background threads only: a start waits for the process to
+   * connect.
    */
   @Nullable
   public synchronized Channel channelFor(@Nullable String sdkName) {
-    if (!mayStart()) return null;
+    if (!mayStart() || !supportsServerConnect(sdkName)) return null;
     String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
     DisplayProcess process = processes.get(idFor(executablePath));
     if (process == null) {
@@ -96,6 +107,13 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     return startLocked(process) > 0 ? new Channel(process.channel, process.port) : null;
   }
 
+  /** Whether the SDK's haxe has {@code --server-connect} (4.0 on); an SDK of unknown version is tried. */
+  private boolean supportsServerConnect(@Nullable String sdkName) {
+    Sdk sdk = HaxeToolPathResolver.findSdk(project, sdkName);
+    HaxeLanguageLevel level = sdk == null ? null : HaxeLanguageLevel.fromVersionString(sdk.getVersionString());
+    return level == null || level.isAtLeast(HaxeLanguageLevel.HAXE_4_0);
+  }
+
   /** The {@link Channel#id()} (listen port) of the SDK's display process while it runs, or -1; starts nothing. */
   public synchronized int runningIdFor(@Nullable String sdkName) {
     String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
@@ -106,10 +124,10 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
   @Override
   protected int startLocked(@NotNull DisplayProcess process) {
     try (ServerSocket listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-      listener.setSoTimeout(ACCEPT_TIMEOUT_MS);
+      listener.setSoTimeout(ACCEPT_POLL_MS);
       int port = listener.getLocalPort();
       startProcess(process, serverCommandLine(process, "--server-connect", HaxeCompilationServerManager.SERVER_HOST + ":" + port));
-      Socket connection = listener.accept();
+      Socket connection = acceptWhileRunning(listener, process);
       process.channel = new FramedDisplayChannel(connection);
       process.port = port;
       process.failedAt = 0;
@@ -121,6 +139,24 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
       process.failedAt = System.currentTimeMillis();
       stopProcessLocked(process);
       return -1;
+    }
+  }
+
+  /**
+   * The connection the started process opens. Gives up as soon as the
+   * process exits, as a haxe without {@code --server-connect} does at once,
+   * else after the accept timeout.
+   */
+  @NotNull
+  private static Socket acceptWhileRunning(@NotNull ServerSocket listener, @NotNull DisplayProcess process) throws IOException {
+    long deadline = System.currentTimeMillis() + ACCEPT_TIMEOUT_MS;
+    while (true) {
+      try {
+        return listener.accept();
+      } catch (SocketTimeoutException e) {
+        if (!process.isRunning()) throw new IOException("the process exited before connecting", e);
+        if (System.currentTimeMillis() >= deadline) throw e;
+      }
     }
   }
 

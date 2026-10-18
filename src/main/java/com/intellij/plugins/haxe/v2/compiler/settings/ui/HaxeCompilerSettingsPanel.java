@@ -195,7 +195,7 @@ public final class HaxeCompilerSettingsPanel {
   @NotNull
   public HaxeDisplayConnectionMode getDisplayConnectionMode() {
     HaxeDisplayConnectionMode selected = displayConnectionCombo.getItem();
-    return selected != null ? selected : HaxeDisplayConnectionMode.SHARED_SERVER;
+    return selected != null ? selected : HaxeDisplayConnectionMode.DEFAULT;
   }
 
   public void setDisplayConnectionMode(@NotNull HaxeDisplayConnectionMode mode) {
