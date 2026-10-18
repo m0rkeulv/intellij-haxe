@@ -29,6 +29,7 @@ import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspathStore;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -37,6 +38,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -233,26 +235,33 @@ class RootsCache {
     OrderEnumerator withoutSdk = OrderEnumerator.orderEntries(model.getProject()).withoutSdk();
     OrderEnumerator sdkOnly = OrderEnumerator.orderEntries(model.getProject()).sdkOnly();
     OrderEnumerator everything = OrderEnumerator.orderEntries(model.getProject());
-    return new RootsCache(collectRoots(model, withoutSdk), findStdRoot(model, sdkOnly, everything));
+    List<VirtualFile> externalClasspaths = HaxeExternalClasspathStore.getInstance(model.getProject()).allDirectories();
+    return new RootsCache(collectRoots(model, withoutSdk, externalClasspaths), findStdRoot(model, sdkOnly, everything));
   }
 
   /**
-   * The module's OWN view: its dependency roots and ITS SDK's std — never
-   * another module's. This is what keeps a Haxe 4 module and a Haxe 5 module
+   * The module's OWN view: its dependency roots, its external classpaths
+   * ({@link HaxeExternalClasspathStore}) and ITS SDK's std — never another
+   * module's. This is what keeps a Haxe 4 module and a Haxe 5 module
    * in one project resolving against their respective standard libraries.
    */
   static RootsCache forModule(HaxeProjectModel model, Module module) {
     OrderEnumerator withoutSdk = OrderEnumerator.orderEntries(module).recursively().withoutSdk();
     OrderEnumerator sdkOnly = OrderEnumerator.orderEntries(module).sdkOnly();
     OrderEnumerator everything = OrderEnumerator.orderEntries(module).recursively();
-    return new RootsCache(collectRoots(model, withoutSdk), findStdRoot(model, sdkOnly, everything));
+    List<VirtualFile> externalClasspaths = HaxeExternalClasspathStore.getInstance(model.getProject()).directoriesOf(module.getName());
+    return new RootsCache(collectRoots(model, withoutSdk, externalClasspaths), findStdRoot(model, sdkOnly, everything));
   }
 
-  private static List<HaxeSourceRootModel> collectRoots(HaxeProjectModel model, OrderEnumerator withoutSdk) {
-    return Stream.concat(
+  private static List<HaxeSourceRootModel> collectRoots(HaxeProjectModel model,
+                                                        OrderEnumerator withoutSdk,
+                                                        List<VirtualFile> externalClasspaths) {
+    return Stream.of(
         Arrays.stream(withoutSdk.getSourceRoots()),
-        Arrays.stream(withoutSdk.getClassesRoots())
+        Arrays.stream(withoutSdk.getClassesRoots()),
+        externalClasspaths.stream()
     )
+      .flatMap(Function.identity())
       .distinct()
       .map(root -> new HaxeSourceRootModel(model, root))
       .collect(Collectors.toList());

@@ -961,6 +961,11 @@
     <!-- V2 build system: Build Project / Build Module delegates to configured build commands -->
     <projectTaskRunner implementation="com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTaskRunner"/>
 
+    <!-- V2 build system: build-file classpaths outside a module join its resolve and use scopes; folders outside every module are indexed -->
+    <resolveScopeEnlarger implementation="com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspathResolveScopeEnlarger"/>
+    <useScopeEnlarger implementation="com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspathUseScopeEnlarger"/>
+    <additionalLibraryRootsProvider implementation="com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspathLibraryProvider"/>
+
     <!-- V2 build system: "Run Haxe action" before-launch step (compiles before run/debug) -->
     <stepsBeforeRunProvider implementation="com.intellij.plugins.haxe.v2.runconfig.HaxeActionBeforeRunTaskProvider"/>
 

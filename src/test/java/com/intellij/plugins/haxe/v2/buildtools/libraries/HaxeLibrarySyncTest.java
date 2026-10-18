@@ -133,7 +133,7 @@ public class HaxeLibrarySyncTest extends HaxeCodeInsightFixtureTestCase {
   @NotNull
   private List<DeclaredDependency> collectedDependencies() {
     Map<Module, List<DeclaredDependency>> dependencies =
-      ReadAction.computeBlocking(() -> HaxeLibrarySync.collectDependencies(getProject()));
+      ReadAction.computeBlocking(() -> HaxeLibrarySync.collect(getProject())).dependencies();
     List<DeclaredDependency> moduleDependencies = dependencies.get(myFixture.getModule());
     assertNotNull(moduleDependencies, "the module must have a dependency entry");
     return moduleDependencies;
