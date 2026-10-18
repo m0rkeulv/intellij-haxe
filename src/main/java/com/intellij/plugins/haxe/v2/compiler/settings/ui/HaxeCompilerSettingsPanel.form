@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <form xmlns="http://www.intellij.com/uidesigner/form/" version="1" bind-to-class="com.intellij.plugins.haxe.v2.compiler.settings.ui.HaxeCompilerSettingsPanel">
-  <grid id="c1000" binding="mainPanel" layout-manager="GridLayoutManager" row-count="15" column-count="2" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
+  <grid id="c1000" binding="mainPanel" layout-manager="GridLayoutManager" row-count="16" column-count="2" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
     <margin top="0" left="0" bottom="0" right="0"/>
     <constraints>
       <xy x="20" y="20" width="640" height="560"/>
@@ -103,9 +103,18 @@
           <toolTipText resource-bundle="messages/HaxeBundle" key="haxe.compiler.ide.features.navigation.tooltip"/>
         </properties>
       </component>
+      <component id="c1020" class="javax.swing.JCheckBox" binding="featureGeneratedMemberPreviewCheckBox">
+        <constraints>
+          <grid row="8" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="4" use-parent-layout="false"/>
+        </constraints>
+        <properties>
+          <text resource-bundle="messages/HaxeBundle" key="haxe.compiler.ide.features.navigation.preview.checkbox"/>
+          <toolTipText resource-bundle="messages/HaxeBundle" key="haxe.compiler.ide.features.navigation.preview.tooltip"/>
+        </properties>
+      </component>
       <component id="c1013" class="javax.swing.JCheckBox" binding="featureCompletionCheckBox">
         <constraints>
-          <grid row="8" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
+          <grid row="9" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text resource-bundle="messages/HaxeBundle" key="haxe.compiler.ide.features.completion.checkbox"/>
@@ -114,7 +123,7 @@
       </component>
       <component id="c1014" class="javax.swing.JCheckBox" binding="compilerDiagnosticsCheckBox">
         <constraints>
-          <grid row="9" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
+          <grid row="10" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text resource-bundle="messages/HaxeBundle" key="haxe.compiler.diagnostics.checkbox"/>
@@ -123,7 +132,7 @@
       </component>
       <component id="c1015" class="javax.swing.JCheckBox" binding="diagnosticsErrorsCheckBox">
         <constraints>
-          <grid row="10" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
+          <grid row="11" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text resource-bundle="messages/HaxeBundle" key="haxe.compiler.diagnostics.errors.checkbox"/>
@@ -132,7 +141,7 @@
       </component>
       <component id="c1016" class="javax.swing.JCheckBox" binding="diagnosticsUnusedImportsCheckBox">
         <constraints>
-          <grid row="11" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
+          <grid row="12" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text resource-bundle="messages/HaxeBundle" key="haxe.compiler.diagnostics.unused.imports.checkbox"/>
@@ -141,7 +150,7 @@
       </component>
       <component id="c1017" class="javax.swing.JCheckBox" binding="diagnosticsRemovableCodeCheckBox">
         <constraints>
-          <grid row="12" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
+          <grid row="13" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text resource-bundle="messages/HaxeBundle" key="haxe.compiler.diagnostics.removable.code.checkbox"/>
@@ -150,7 +159,7 @@
       </component>
       <component id="c1018" class="javax.swing.JCheckBox" binding="diagnosticsOnlyCheckBox">
         <constraints>
-          <grid row="13" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
+          <grid row="14" column="0" row-span="1" col-span="2" vsize-policy="0" hsize-policy="3" anchor="8" fill="1" indent="2" use-parent-layout="false"/>
         </constraints>
         <properties>
           <text resource-bundle="messages/HaxeBundle" key="haxe.compiler.diagnostics.only.checkbox"/>
@@ -159,7 +168,7 @@
       </component>
       <component id="c1019" class="javax.swing.JPanel" binding="tablePanel" custom-create="true">
         <constraints>
-          <grid row="14" column="0" row-span="1" col-span="2" vsize-policy="7" hsize-policy="7" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
+          <grid row="15" column="0" row-span="1" col-span="2" vsize-policy="7" hsize-policy="7" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties/>
       </component>

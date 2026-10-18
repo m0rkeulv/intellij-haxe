@@ -38,6 +38,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
     public boolean compilerFeatureInlays = true;
     public boolean compilerFeatureFindUsages = true;
     public boolean compilerFeatureNavigation = true;
+    public boolean compilerFeatureGeneratedMemberPreview = true;
     public boolean compilerFeatureCompletion = true;
     public String displayConnectionMode = HaxeDisplayConnectionMode.SHARED_SERVER.getId();
   }
@@ -241,6 +242,16 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   @Override
   public void setCompilerNavigationEnabled(boolean enabled) {
     state.compilerFeatureNavigation = enabled;
+  }
+
+  @Override
+  public boolean isGeneratedMemberPreviewEnabled() {
+    return state.compilerFeatureGeneratedMemberPreview;
+  }
+
+  @Override
+  public void setGeneratedMemberPreviewEnabled(boolean enabled) {
+    state.compilerFeatureGeneratedMemberPreview = enabled;
   }
 
   @Override

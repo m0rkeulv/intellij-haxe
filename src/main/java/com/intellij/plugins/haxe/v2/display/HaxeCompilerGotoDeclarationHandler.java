@@ -7,6 +7,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.Location;
 import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.lang.psi.HaxeReference;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.DisplayContext;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -26,14 +27,19 @@ import java.util.List;
  * a bounded time. Ctrl-hover asks too, so every hovered reference costs one
  * request.
  * <p>
- * A name that neither the server nor the static resolver can place is taken
- * for a declaration a macro generated into the enclosing member, such as the
- * parameter a build macro wraps around an expression; its target is the
- * generated-code preview of that member, where the declaration exists. No
- * targets are returned for a declaration under the caret, where the
- * platform keeps its show-usages behaviour, nor for a file the compiler
- * cannot serve, where the notification is shown and the platform resolves
- * the reference itself.
+ * While the generated-member preview is on, a declaration a macro generated
+ * opens the generated-code preview, where it exists: a member the resolver
+ * finds only in the compiler's post-macro blueprint, and a name that neither
+ * the server nor the static resolver can place, such as the parameter a
+ * build macro wraps around an expression. For a generated member the server
+ * answers the position the macro gave it, typically the source field it was
+ * generated from or the class's {@code @:build}; with the preview off,
+ * navigation goes there. A member found in a blueprint needs no build
+ * command, because its blueprint already came from the compiler; the server
+ * requests do. No targets are returned for a declaration under the caret,
+ * where the platform keeps its show-usages behaviour, nor for a file the
+ * compiler cannot serve, where the notification is shown and the platform
+ * resolves the reference itself.
  */
 public final class HaxeCompilerGotoDeclarationHandler implements GotoDeclarationHandler {
 
@@ -45,14 +51,26 @@ public final class HaxeCompilerGotoDeclarationHandler implements GotoDeclaration
     VirtualFile file = HaxeCompilerDisplayService.physicalFileOf(sourceElement);
     if (file == null) return null;
     Project project = sourceElement.getProject();
+    DisplayContext previewContext = previewContextFor(project, file);
+    if (previewContext != null) {
+      PsiElement resolved = reference.resolve();
+      PsiElement generatedMember = blueprintMemberPreviewOf(resolved, reference.getReferenceName(), previewContext);
+      if (generatedMember != null) return new PsiElement[]{generatedMember};
+    }
+
     HaxeCompilerNavigationService service = HaxeCompilerNavigationService.getInstance(project);
     if (!service.ensureAvailable(file)) return null;
-
     List<PsiElement> declarations = declarationsOf(project, service.definitionUnderReadLock(file, offset));
     if (!declarations.isEmpty()) return declarations.toArray(PsiElement.EMPTY_ARRAY);
-    DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(file);
-    PsiElement generated = context == null ? null : generatedDeclarationOf(reference, context);
+    PsiElement generated = previewContext == null ? null : generatedDeclarationOf(reference, previewContext);
     return generated == null ? null : new PsiElement[]{generated};
+  }
+
+  /** The context previews are built in; null while the generated-member preview is off or the file has none. */
+  @Nullable
+  private static DisplayContext previewContextFor(@NotNull Project project, @NotNull VirtualFile file) {
+    if (!HaxeCompilerSettings.getInstance(project).usesGeneratedMemberPreview()) return null;
+    return HaxeCompilerDisplayService.getInstance(project).contextFor(file);
   }
 
   @NotNull
@@ -64,6 +82,24 @@ public final class HaxeCompilerGotoDeclarationHandler implements GotoDeclaration
       if (declaration != null) declarations.add(declaration);
     }
     return declarations;
+  }
+
+  /**
+   * The generated-code preview of a member the resolver found only in the
+   * compiler's post-macro blueprint, with the caret on {@code memberName}.
+   * Null for a target with a source declaration.
+   */
+  @Nullable
+  static PsiElement blueprintMemberPreviewOf(@Nullable PsiElement resolved,
+                                             @Nullable String memberName,
+                                             @NotNull DisplayContext context) {
+    if (resolved == null) return null;
+    PsiFile resolvedFile = resolved.getContainingFile();
+    if (resolvedFile == null) return null;
+    String dotPath = resolvedFile.getUserData(HaxeCompilerResolveService.BLUEPRINT_DOT_PATH);
+    if (dotPath == null) return null;
+    HaxeGeneratedPreviewSpot spot = HaxeGeneratedPreviewSpot.ofType(dotPath, memberName);
+    return HaxeGeneratedPreviewTarget.createElement(resolved, context, spot);
   }
 
   /**

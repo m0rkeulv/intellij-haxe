@@ -70,6 +70,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
            || panel.isCompilerInlaysEnabled() != settings.isCompilerInlaysEnabled()
            || panel.isCompilerFindUsagesEnabled() != settings.isCompilerFindUsagesEnabled()
            || panel.isCompilerNavigationEnabled() != settings.isCompilerNavigationEnabled()
+           || panel.isGeneratedMemberPreviewEnabled() != settings.isGeneratedMemberPreviewEnabled()
            || panel.isCompilerCompletionEnabled() != settings.isCompilerCompletionEnabled()
            || panel.getDisplayConnectionMode() != settings.getDisplayConnectionMode();
   }
@@ -91,6 +92,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     settings.setCompilerInlaysEnabled(panel.isCompilerInlaysEnabled());
     settings.setCompilerFindUsagesEnabled(panel.isCompilerFindUsagesEnabled());
     settings.setCompilerNavigationEnabled(panel.isCompilerNavigationEnabled());
+    settings.setGeneratedMemberPreviewEnabled(panel.isGeneratedMemberPreviewEnabled());
     settings.setCompilerCompletionEnabled(panel.isCompilerCompletionEnabled());
     applyDisplayConnectionMode(settings, panel.getDisplayConnectionMode());
     HaxeLanguageLevelUtil.notifyLanguageLevelChanged(project);
@@ -115,6 +117,7 @@ public final class HaxeCompilerConfigurable implements SearchableConfigurable, C
     panel.setCompilerInlaysEnabled(settings.isCompilerInlaysEnabled());
     panel.setCompilerFindUsagesEnabled(settings.isCompilerFindUsagesEnabled());
     panel.setCompilerNavigationEnabled(settings.isCompilerNavigationEnabled());
+    panel.setGeneratedMemberPreviewEnabled(settings.isGeneratedMemberPreviewEnabled());
     panel.setCompilerCompletionEnabled(settings.isCompilerCompletionEnabled());
     panel.setDisplayConnectionMode(settings.getDisplayConnectionMode());
   }
