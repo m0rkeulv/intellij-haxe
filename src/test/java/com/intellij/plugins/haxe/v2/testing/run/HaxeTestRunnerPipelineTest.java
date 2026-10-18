@@ -101,9 +101,11 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
 
     // live names carry no leading dot (utest's BATCH spells the default
     // package as `.LiveCase` - those replays must all be swallowed)
+    // sorted: haxe 3 reflects the test methods in another order than the declaration order 4.x keeps
+    List<String> finishedTestsSorted = recorder.finishedTests.stream().sorted().toList();
     assertTrue(recorder.startedSuites.contains("LiveCase"), "class suite expected, got: " + recorder.startedSuites);
-    assertEquals(List.of("LiveCase.testTraces", "LiveCase.testPasses", "LiveCase.testNoAsserts"),
-                 recorder.finishedTests,
+    assertEquals(List.of("LiveCase.testNoAsserts", "LiveCase.testPasses", "LiveCase.testTraces"),
+                 finishedTestsSorted,
                  "each test finishes exactly once - the batch replay is deduplicated");
     assertFalse(recorder.startedSuites.contains(".LiveCase"),
                 "the batch's suite replay must be swallowed, got: " + recorder.startedSuites);

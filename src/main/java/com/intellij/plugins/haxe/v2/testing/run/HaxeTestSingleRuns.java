@@ -50,6 +50,8 @@ final class HaxeTestSingleRuns {
 
   /** The generated entry point's class name (hxcpp names its binary after it). */
   static final String MAIN_CLASS = "IjSingleRun";
+  /** -main, not --main: haxe 3.x knows only the single-dash form, and haxe 5 still accepts it. */
+  static final String MAIN_FLAG = "-main";
 
   private HaxeTestSingleRuns() {
   }
@@ -81,7 +83,7 @@ final class HaxeTestSingleRuns {
     List<String> command = new ArrayList<>(spliced);
     command.add("-cp");
     command.add(generated.toString());
-    command.add("--main");
+    command.add(MAIN_FLAG);
     command.add(MAIN_CLASS);
     return new HaxeCompileCommands.Resolved(resolved.containerId(), command, resolved.workDirectory(), resolved.presentable(),
                                             resolved.connectEligible());
