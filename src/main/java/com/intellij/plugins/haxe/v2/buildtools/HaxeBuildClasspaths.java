@@ -80,11 +80,8 @@ public final class HaxeBuildClasspaths {
     if (buildFile.type() == HaxeBuildFileType.HXML) {
       directories.add(anchor.getPath());
     }
-    for (String classpath : classpaths) {
-      VirtualFile resolved = resolveClasspathEntry(anchor, classpath);
-      if (resolved != null) {
-        directories.add(resolved.getPath());
-      }
+    for (VirtualFile directory : resolvedDirectories(anchor, classpaths)) {
+      directories.add(directory.getPath());
     }
 
     // -lib sources live outside the -cp entries; the sync'd managed module
@@ -94,6 +91,31 @@ public final class HaxeBuildClasspaths {
     Module module = ModuleUtilCore.findModuleForFile(buildFile.file(), project);
     if (module != null) {
       collectManagedLibraryRoots(module, directories);
+    }
+    return directories;
+  }
+
+  /**
+   * The build's own classpath entries (its selected section) as existing
+   * directories: without the implicit work directory and the library roots
+   * {@link #sourceDirectories} adds. Call in a read action.
+   */
+  @NotNull
+  public static List<VirtualFile> declaredDirectories(@NotNull Project project, @NotNull HaxeBuildFile buildFile) {
+    VirtualFile anchor = HaxeBuildWorkDirectories.anchor(project, buildFile.file());
+    if (anchor == null) return List.of();
+    List<String> classpaths = HaxeBuildSections.inspectSelected(project, buildFile).classpaths();
+    return resolvedDirectories(anchor, classpaths);
+  }
+
+  @NotNull
+  private static List<VirtualFile> resolvedDirectories(@NotNull VirtualFile anchor, @NotNull List<String> classpaths) {
+    List<VirtualFile> directories = new ArrayList<>();
+    for (String classpath : classpaths) {
+      VirtualFile resolved = resolveClasspathEntry(anchor, classpath);
+      if (resolved != null) {
+        directories.add(resolved);
+      }
     }
     return directories;
   }

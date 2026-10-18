@@ -11,6 +11,9 @@ import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileInfo.HaxeDefine;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph.Library;
+import com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspathStore;
+import com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspaths;
+import com.intellij.plugins.haxe.v2.buildtools.classpaths.HaxeExternalClasspaths.ExternalClasspath;
 import java.nio.file.Path;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeEffectiveBuildFileInfo;
 import com.intellij.openapi.module.Module;
@@ -46,8 +49,10 @@ import static com.intellij.plugins.haxe.config.HaxeTarget.FLAG_DEFINE_VALUE;
  * it counts only the libraries a file's build declares. Classpaths come from
  * `haxelib path`, which includes transitive dependencies; it runs from the
  * declaring build's work directory, so a build-local {@code .haxelib}
- * repository counts. Managed entries carry a name prefix so the sync can
- * remove stale ones without touching user-defined libraries.
+ * repository counts. The same run collects each module's build-file
+ * classpaths outside its own sources ({@link HaxeExternalClasspaths}).
+ * Managed entries carry a name prefix so the sync can remove stale ones
+ * without touching user-defined libraries.
  */
 // TODO: a file resolves against the libraries of every build of its module; a per-context library scope would limit it to its own build's
 @CustomLog
@@ -109,6 +114,11 @@ public final class HaxeLibrarySync {
                             @NotNull Map<String, Map<String, List<String>>> closuresByModule) {
   }
 
+  /** One run's inputs, read in one read action: per module its declared libraries, and per module name its external classpaths. */
+  record Collected(@NotNull Map<Module, List<DeclaredDependency>> dependencies,
+                   @NotNull Map<String, List<ExternalClasspath>> externalClasspaths) {
+  }
+
   /**
    * Requests a background sync of every module's libraries. Syncs run one at
    * a time and a request during a run gets one follow-up run
@@ -127,12 +137,15 @@ public final class HaxeLibrarySync {
 
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        Map<Module, List<DeclaredDependency>> dependencies =
-          HaxeReadActions.compute(() -> collectDependencies(project));
+        Collected collected = HaxeReadActions.compute(() -> collect(project));
+        if (project.isDisposed()) return;
+        // they need no haxelib run: published before the slow lookups, so files resolve through them early
+        HaxeExternalClasspathStore.getInstance(project).replaceAll(collected.externalClasspaths());
+
         Map<String, Map<String, List<String>>> byModuleName = new LinkedHashMap<>();
         SyncResult result = new SyncResult(new LinkedHashMap<>(), new LinkedHashMap<>(), new LinkedHashMap<>());
-        dependencies.forEach((module, moduleDependencies) -> {
-          Resolution resolution = resolveClasspaths(project, module, moduleDependencies, indicator);
+        collected.dependencies().forEach((module, declared) -> {
+          Resolution resolution = resolveClasspaths(project, module, declared, indicator);
           byModuleName.put(module.getName(), resolution.classpaths());
           result.definesByModule().put(module.getName(), resolution.definesByDependency());
           resolution.libraries().forEach(result.libraries()::putIfAbsent);
@@ -166,29 +179,38 @@ public final class HaxeLibrarySync {
     }
   }
 
+  /** Every module's inputs; a module the legacy engine equips gets none ({@link #legacyEngineOwns}). Call in a read action. */
   @NotNull
-  static Map<Module, List<DeclaredDependency>> collectDependencies(@NotNull Project project) {
-    Map<Module, List<DeclaredDependency>> dependencies = new LinkedHashMap<>();
+  static Collected collect(@NotNull Project project) {
+    Collected collected = new Collected(new LinkedHashMap<>(), new LinkedHashMap<>());
     for (Module module : ModuleManager.getInstance(project).getModules()) {
-      List<DeclaredDependency> moduleDependencies = legacyEngineOwns(project, module) ? List.of() : moduleDependencies(project, module);
-      dependencies.put(module, moduleDependencies);
+      if (legacyEngineOwns(project, module)) {
+        collected.dependencies().put(module, List.of());
+        continue;
+      }
+      List<HaxeBuildFile> buildFiles = HaxeKnownBuildFiles.forModule(project, module);
+      List<HaxeBuildFile> sources = dependencySources(project, module, buildFiles);
+      collected.dependencies().put(module, declaredDependencies(project, module, buildFiles, sources));
+      collected.externalClasspaths().put(module.getName(), HaxeExternalClasspaths.of(project, module, sources));
     }
-    return dependencies;
+    return collected;
   }
 
+  /** The libraries the module's builds ({@code sources}) declare, plus the hxp toolchain when it holds hxp scripts. */
   @NotNull
-  private static List<DeclaredDependency> moduleDependencies(@NotNull Project project, @NotNull Module module) {
-    List<HaxeBuildFile> buildFiles = HaxeKnownBuildFiles.forModule(project, module);
-    List<HaxeBuildFile> sources = dependencySources(project, module, buildFiles);
-    List<DeclaredDependency> moduleDependencies = new ArrayList<>();
+  private static List<DeclaredDependency> declaredDependencies(@NotNull Project project,
+                                                               @NotNull Module module,
+                                                               @NotNull List<HaxeBuildFile> buildFiles,
+                                                               @NotNull List<HaxeBuildFile> sources) {
+    List<DeclaredDependency> declared = new ArrayList<>();
     for (HaxeBuildFile buildFile : sources) {
       Path workDirectory = haxelibWorkDirectory(project, module, buildFile);
       for (HaxeLibDependency dependency : effectiveLibraries(project, buildFile)) {
-        addIfNameAbsent(moduleDependencies, new DeclaredDependency(dependency, workDirectory));
+        addIfNameAbsent(declared, new DeclaredDependency(dependency, workDirectory));
       }
     }
-    addHxpToolchainLibraries(project, module, buildFiles, moduleDependencies);
-    return moduleDependencies;
+    addHxpToolchainLibraries(project, module, buildFiles, declared);
+    return declared;
   }
 
   /**
@@ -270,10 +292,10 @@ public final class HaxeLibrarySync {
   }
 
   /**
-   * The build files whose libraries the module gets: all its known build
-   * files, plus the container's tests build files it owns - the module's
-   * source roots hold the test sources too, and a marked tests build need
-   * not be a known build file.
+   * The build files whose libraries and classpaths the module gets: all its
+   * known build files, plus the container's tests build files it owns - the
+   * module's source roots hold the test sources too, and a marked tests
+   * build need not be a known build file.
    */
   @NotNull
   private static List<HaxeBuildFile> dependencySources(@NotNull Project project,
