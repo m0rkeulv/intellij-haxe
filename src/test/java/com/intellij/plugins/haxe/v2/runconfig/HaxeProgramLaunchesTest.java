@@ -150,7 +150,8 @@ public class HaxeProgramLaunchesTest extends HaxeCodeInsightFixtureTestCase {
     Map<Parameter, String> parameters =
       HaxeProgramLaunches.defaultParameters(getProject(), buildFile, HaxeLaunchKind.NODE, "out/server.js");
 
-    Path script = projectDirectory.resolve("out/server.js");
+    // the VFS spells the folder with its long name; a temp dir may come as a short 8.3 alias on windows
+    Path script = Path.of(buildFile.file().getParent().getPath()).resolve("out/server.js");
     assertEquals(Map.of(
       Parameter.EXECUTABLE, "",
       Parameter.PROGRAM_ARGUMENTS, script.toString(),
