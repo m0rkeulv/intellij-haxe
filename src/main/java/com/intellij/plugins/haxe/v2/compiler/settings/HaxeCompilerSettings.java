@@ -144,6 +144,15 @@ public interface HaxeCompilerSettings {
 
   void setCompilerNavigationEnabled(boolean enabled);
 
+  /**
+   * Whether go-to-declaration on a macro-generated member opens the
+   * post-macro preview, where the member exists, instead of the source
+   * position the macro gave it. Counts only under compiler navigation.
+   */
+  boolean isGeneratedMemberPreviewEnabled();
+
+  void setGeneratedMemberPreviewEnabled(boolean enabled);
+
   /** Whether completion may use the compiler at all; {@link #getCompletionMode()} then says how. */
   boolean isCompilerCompletionEnabled();
 
@@ -159,6 +168,10 @@ public interface HaxeCompilerSettings {
 
   default boolean usesCompilerNavigation() {
     return isCompilerIdeFeaturesEnabled() && isCompilerNavigationEnabled();
+  }
+
+  default boolean usesGeneratedMemberPreview() {
+    return usesCompilerNavigation() && isGeneratedMemberPreviewEnabled();
   }
 
   /** The completion mode in force: the chosen one while the master and the completion toggles are on, else IDE only. */

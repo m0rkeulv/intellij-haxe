@@ -138,6 +138,7 @@ public class HaxeCompilerProjectSettingsTest {
     HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
     settings.setCompilerInlaysEnabled(false);
     settings.setCompilerFindUsagesEnabled(false);
+    settings.setGeneratedMemberPreviewEnabled(false);
 
     Element serialized = XmlSerializer.serialize(settings.getState());
     HaxeCompilerProjectSettings.State deserialized =
@@ -148,7 +149,22 @@ public class HaxeCompilerProjectSettingsTest {
     assertFalse(reloaded.isCompilerInlaysEnabled());
     assertFalse(reloaded.isCompilerFindUsagesEnabled());
     assertTrue(reloaded.isCompilerNavigationEnabled());
+    assertFalse(reloaded.isGeneratedMemberPreviewEnabled());
     assertTrue(reloaded.isCompilerCompletionEnabled());
+  }
+
+  @Test
+  @DisplayName("generated member preview defaults on and counts only under compiler navigation")
+  public void generatedMemberPreviewDefaultsOnAndCountsOnlyUnderCompilerNavigation() {
+    HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
+    assertTrue(settings.isGeneratedMemberPreviewEnabled());
+    assertFalse(settings.usesGeneratedMemberPreview(), "the master switch is off by default");
+
+    settings.setCompilerIdeFeaturesEnabled(true);
+    assertTrue(settings.usesGeneratedMemberPreview());
+
+    settings.setCompilerNavigationEnabled(false);
+    assertFalse(settings.usesGeneratedMemberPreview(), "the preview is part of compiler navigation");
   }
 
   @Test

@@ -68,6 +68,7 @@ public final class HaxeCompilerSettingsPanel {
   private JCheckBox featureInlaysCheckBox;
   private JCheckBox featureFindUsagesCheckBox;
   private JCheckBox featureNavigationCheckBox;
+  private JCheckBox featureGeneratedMemberPreviewCheckBox;
   private JCheckBox featureCompletionCheckBox;
   private JCheckBox compilerDiagnosticsCheckBox;
   private JCheckBox diagnosticsErrorsCheckBox;
@@ -85,6 +86,7 @@ public final class HaxeCompilerSettingsPanel {
     // "Project default (x.y)" cells display the selected default, keep them in sync.
     defaultLevelCombo.addActionListener(e -> table.repaint());
     compilerIdeFeaturesCheckBox.addItemListener(e -> updateFeatureChildEnablement());
+    featureNavigationCheckBox.addItemListener(e -> updateFeatureChildEnablement());
     featureCompletionCheckBox.addItemListener(e -> updateFeatureChildEnablement());
     compilerDiagnosticsCheckBox.addItemListener(e -> updateDiagnosticsChildEnablement());
     updateFeatureChildEnablement();
@@ -169,12 +171,14 @@ public final class HaxeCompilerSettingsPanel {
     return List.of(featureInlaysCheckBox, featureFindUsagesCheckBox, featureNavigationCheckBox, featureCompletionCheckBox);
   }
 
-  /// The per-feature toggles apply only under the master toggle, and the completion source only while completion is one of them.
+  /// The per-feature toggles apply only under the master toggle; the generated-member preview and the completion
+  /// source only while navigation and completion are among them.
   private void updateFeatureChildEnablement() {
     boolean features = compilerIdeFeaturesCheckBox.isSelected();
     for (JCheckBox child : featureChildren()) {
       child.setEnabled(features);
     }
+    featureGeneratedMemberPreviewCheckBox.setEnabled(features && featureNavigationCheckBox.isSelected());
     completionModeCombo.setEnabled(features && featureCompletionCheckBox.isSelected());
   }
 
@@ -230,6 +234,14 @@ public final class HaxeCompilerSettingsPanel {
     featureNavigationCheckBox.setSelected(enabled);
   }
 
+  public boolean isGeneratedMemberPreviewEnabled() {
+    return featureGeneratedMemberPreviewCheckBox.isSelected();
+  }
+
+  public void setGeneratedMemberPreviewEnabled(boolean enabled) {
+    featureGeneratedMemberPreviewCheckBox.setSelected(enabled);
+  }
+
   public boolean isCompilerCompletionEnabled() {
     return featureCompletionCheckBox.isSelected();
   }
@@ -241,6 +253,11 @@ public final class HaxeCompilerSettingsPanel {
   /** Whether the completion source combo takes input: only while completion is a compiler feature. */
   boolean isCompletionModeChoiceEnabled() {
     return completionModeCombo.isEnabled();
+  }
+
+  /** Whether the generated-member preview toggle takes input: only while navigation is a compiler feature. */
+  boolean isGeneratedMemberPreviewChoiceEnabled() {
+    return featureGeneratedMemberPreviewCheckBox.isEnabled();
   }
 
   @NotNull

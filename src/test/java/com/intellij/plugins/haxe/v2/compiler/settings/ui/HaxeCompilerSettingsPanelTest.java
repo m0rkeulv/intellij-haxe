@@ -44,4 +44,22 @@ public class HaxeCompilerSettingsPanelTest extends HaxeLightFixtureTestCase {
     assertFalse(panel.isCompletionModeChoiceEnabled());
     assertTrue(panel.isCompilerFindUsagesEnabled(), "a child keeps its value while disabled");
   }
+
+  @Test
+  @DisplayName("generated member preview follows navigation")
+  public void testGeneratedMemberPreviewFollowsNavigation() {
+    HaxeCompilerSettingsPanel panel = new HaxeCompilerSettingsPanel();
+    panel.setCompilerIdeFeaturesEnabled(true);
+    panel.setCompilerNavigationEnabled(true);
+    panel.setGeneratedMemberPreviewEnabled(false);
+    assertFalse(panel.isGeneratedMemberPreviewEnabled());
+    assertTrue(panel.isGeneratedMemberPreviewChoiceEnabled());
+
+    panel.setCompilerNavigationEnabled(false);
+    assertFalse(panel.isGeneratedMemberPreviewChoiceEnabled(), "the preview is moot while navigation is no compiler feature");
+
+    panel.setCompilerNavigationEnabled(true);
+    panel.setCompilerIdeFeaturesEnabled(false);
+    assertFalse(panel.isGeneratedMemberPreviewChoiceEnabled());
+  }
 }
