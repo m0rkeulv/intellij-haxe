@@ -8,7 +8,6 @@ import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.FramedDisplayChannel;
-import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeDisplayConnectionMode;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeServerGeneration;
@@ -24,7 +23,9 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/// Runs one dedicated haxe display process per SDK in `--server-connect`
+/// Runs one dedicated haxe display process per compilation server instance
+/// ([HaxeServerAssignment]: an SDK, or a container with a server of its own)
+/// in `--server-connect`
 /// mode: the IDE listens on a loopback port, haxe connects to it and keeps
 /// that connection for its lifetime, and requests travel as length-prefixed
 /// frames ([FramedDisplayChannel]). Haxe 3 has no `--server-connect`; its
@@ -61,8 +62,8 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     FramedDisplayChannel channel;
     long failedAt;
 
-    DisplayProcess(@NotNull String executablePath, @Nullable String sdkName, @NotNull String displayName) {
-      super(idFor(executablePath), executablePath, sdkName, displayName);
+    DisplayProcess(@NotNull HaxeServerAssignment assignment, @NotNull String displayName) {
+      super(idFor(assignment), assignment.executablePath(), assignment.sdkName(), displayName);
     }
 
     @Override
@@ -84,26 +85,25 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     return project.getService(HaxeDisplayProcessManager.class);
   }
 
-  /** The id of the display process for a haxe executable; request metrics are recorded under it. */
+  /** The id of the display process of a server instance; request metrics are recorded under it. */
   @NotNull
-  public static String idFor(@NotNull String executablePath) {
-    return executablePath + ID_SUFFIX;
+  public static String idFor(@NotNull HaxeServerAssignment assignment) {
+    return assignment.id() + ID_SUFFIX;
   }
 
   /**
-   * The channel to the SDK's display process, started when needed. Null when
-   * the compilation server is disabled, the project is not trusted, or a
-   * start failed within the cooldown. Background threads only: a start waits
-   * for the process to connect.
+   * The channel to the assigned instance's display process, started when
+   * needed. Null when the compilation server is disabled, the project is not
+   * trusted, or a start failed within the cooldown. Background threads only:
+   * a start waits for the process to connect.
    */
   @Nullable
-  public synchronized Channel channelFor(@Nullable String sdkName) {
+  public synchronized Channel channelFor(@NotNull HaxeServerAssignment assignment) {
     if (!mayStart()) return null;
-    String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
-    DisplayProcess process = processes.get(idFor(executablePath));
+    DisplayProcess process = processes.get(idFor(assignment));
     if (process == null) {
-      String name = HaxeCompilationServerManager.displayNameFor(project, sdkName, executablePath);
-      process = new DisplayProcess(executablePath, sdkName, HaxeBundle.message("haxe.server.console.display.tab", name));
+      String displayName = HaxeBundle.message("haxe.server.console.display.tab", assignment.displayName());
+      process = new DisplayProcess(assignment, displayName);
       processes.put(process.id, process);
     }
     if (process.isAlive()) return new Channel(process.channel, process.port);
@@ -120,10 +120,9 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     if (mode == HaxeDisplayConnectionMode.SHARED_SERVER) stopAll();
   }
 
-  /** The {@link Channel#id()} of the SDK's display process while it runs, or -1; starts nothing. */
-  public synchronized int runningIdFor(@Nullable String sdkName) {
-    String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
-    DisplayProcess process = processes.get(idFor(executablePath));
+  /** The {@link Channel#id()} of the assigned instance's display process while it runs, or -1; starts nothing. */
+  public synchronized int runningIdFor(@NotNull HaxeServerAssignment assignment) {
+    DisplayProcess process = processes.get(idFor(assignment));
     return process != null && process.isAlive() ? process.port : -1;
   }
 

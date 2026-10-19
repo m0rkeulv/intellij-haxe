@@ -12,8 +12,7 @@ import com.intellij.plugins.haxe.config.sdk.HaxeSdkType;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibrarySync;
 import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleSdkApplier;
 import com.intellij.plugins.haxe.v2.buildtools.projectmodel.HaxeModuleWorkspace;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore.CompileCommand;
 import com.intellij.plugins.haxe.v2.buildtools.settings.ui.HaxeBuildToolsConfigurable;
@@ -196,6 +195,34 @@ public final class HaxeToolWindowEditors {
     if (!enable) {
       // an opted-out container sends no more requests - a lingering failure could never clear itself
       HaxeContextFailures.getInstance(project).record(serverNode.containerId(), null);
+    }
+  }
+
+  /** Which compilation server instance serves the container: its SDK's shared one, or a dedicated one with a cache of its own. */
+  public static void showServerInstancePopup(@NotNull Project project,
+                                             @NotNull ServerInstanceNode serverInstance,
+                                             @NotNull RelativePoint point) {
+    JBPopupFactory.getInstance()
+      .createPopupChooserBuilder(List.of(HaxeServerSharing.values()))
+      .setTitle(HaxeBundle.message("haxe.toolwindow.select.server.instance.title"))
+      .setRenderer(BuilderKt.textListCellRenderer("", (HaxeServerSharing sharing) -> sharing.getPresentableText()))
+      .setSelectedValue(serverInstance.sharing(), true)
+      .setItemChosenCallback(sharing -> chooseServerSharing(project, serverInstance.containerId(), sharing))
+      .createPopup()
+      .show(point);
+  }
+
+  /** A container leaving its dedicated instance forgets it (process, console tab, failures); the shared instance stays for the other containers. */
+  private static void chooseServerSharing(@NotNull Project project,
+                                          @NotNull String containerId,
+                                          @NotNull HaxeServerSharing sharing) {
+    HaxeEnvironmentStore environments = HaxeEnvironmentStore.getInstance(project);
+    if (environments.isUsingDedicatedServer(containerId) == sharing.isDedicated()) return;
+    HaxeServerAssignment previous = HaxeServerAssignment.forContainer(project, containerId);
+    environments.setUsingDedicatedServer(containerId, sharing.isDedicated());
+    if (!sharing.isDedicated()) {
+      HaxeCompilationServerManager.getInstance(project).removeServer(previous.id());
+      HaxeDisplayProcessManager.getInstance(project).removeServer(HaxeDisplayProcessManager.idFor(previous));
     }
   }
 

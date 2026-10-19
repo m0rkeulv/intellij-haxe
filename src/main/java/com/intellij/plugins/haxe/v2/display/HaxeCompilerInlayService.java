@@ -149,7 +149,7 @@ public final class HaxeCompilerInlayService implements Disposable {
   private boolean lacksCompiledTypes(@NotNull VirtualFile file) {
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
     DisplayContext context = displayService.contextFor(file);
-    return context != null && displayService.lacksMethod(context.sdkName(), DisplayMethods.COMPILED_TYPES);
+    return context != null && displayService.lacksMethod(context, DisplayMethods.COMPILED_TYPES);
   }
 
   /** Whether the editor holds text for the file that is not on disk yet; a compile would read the older file. */
@@ -215,7 +215,7 @@ public final class HaxeCompilerInlayService implements Disposable {
     long saved = savedSourcesStamp();
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
     Connected connected = displayService.connectFor(context, DisplayMethods.COMPILED_TYPES);
-    if (connected == null) return displayService.lacksMethod(context.sdkName(), DisplayMethods.COMPILED_TYPES);
+    if (connected == null) return displayService.lacksMethod(context, DisplayMethods.COMPILED_TYPES);
     List<String> args = new ArrayList<>(connected.args());
     args.add(HxmlFileParser.NO_OUTPUT_FLAG);
     long started = System.currentTimeMillis();

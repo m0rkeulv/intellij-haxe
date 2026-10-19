@@ -1,11 +1,8 @@
 package com.intellij.plugins.haxe.v2.toolwindow;
 
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeBuildToolFailures;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeEffectiveBuildFileInfo;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerGenerations;
+import com.intellij.plugins.haxe.v2.buildtools.server.*;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
@@ -86,6 +83,7 @@ final class HaxeToolWindowModelBuilder {
                         EnvironmentData environment,
                         EnvCompileCommandNode compileCommand,
                         CompilationServerNode server,
+                        ServerInstanceNode serverInstance,
                         ConnectionModeNode connectionMode,
                         List<ToolNode> tools,
                         boolean userConfigured) {
@@ -119,13 +117,14 @@ final class HaxeToolWindowModelBuilder {
       EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files(), testsPaths);
       EnvironmentData environment = buildEnvironmentData(raw.id());
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
+      ServerInstanceNode serverInstance = serverInstanceNode(raw.id());
       ConnectionModeNode connectionMode = connectionModeNode(raw.id(), server);
       List<String> markedTestsPaths = HaxeTestsBuildFileStore.getInstance(project).getTestsFilePaths(raw.id());
       List<ToolNode> tools = containerTools(raw);
       boolean userConfigured = hasUserConfiguration(raw.id());
       ContainerEntry container = new ContainerEntry(raw.id(), raw.displayName(), raw.projectRoot(), raw.files(),
                                                     activePath, testsPaths, markedTestsPaths, environment, compileCommand,
-                                                    server, connectionMode, tools, userConfigured);
+                                                    server, serverInstance, connectionMode, tools, userConfigured);
       containers.add(container);
     }
     return containers;
@@ -503,23 +502,27 @@ final class HaxeToolWindowModelBuilder {
                                      contextFailure);
   }
 
+  /** The container's server-instance row: its SDK's shared server, or one dedicated to the container. */
+  @NotNull
+  private ServerInstanceNode serverInstanceNode(@NotNull String containerId) {
+    boolean dedicated = HaxeEnvironmentStore.getInstance(project).isUsingDedicatedServer(containerId);
+    return new ServerInstanceNode(containerId, HaxeServerSharing.of(dedicated));
+  }
+
   /**
    * The container's connection mode row: the mode of its SDK's server
-   * generation, live while the server it names runs; off while the
-   * compilation server does not serve the container.
+   * generation; off while the compilation server does not serve the
+   * container.
    */
   @NotNull
   private ConnectionModeNode connectionModeNode(@NotNull String containerId, @NotNull CompilationServerNode server) {
     String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
     HaxeServerGeneration generation = HaxeServerGenerations.known(project, sdkName);
     if (!servesRequests(server)) {
-      return new ConnectionModeNode(containerId, generation, HaxeBundle.message("haxe.toolwindow.connection.mode.off"), false);
+      return new ConnectionModeNode(containerId, generation, HaxeBundle.message("haxe.toolwindow.connection.mode.off"));
     }
     HaxeDisplayConnectionMode mode = HaxeCompilerSettings.getInstance(project).getDisplayConnectionMode(generation);
-    boolean live = mode == HaxeDisplayConnectionMode.DEDICATED_PROCESS
-                   ? HaxeDisplayProcessManager.getInstance(project).runningIdFor(sdkName) > 0
-                   : server.running();
-    return new ConnectionModeNode(containerId, generation, mode.getPresentableText(generation), live);
+    return new ConnectionModeNode(containerId, generation, mode.getPresentableText(generation));
   }
 
   /** Whether the compilation server serves the container's compiler requests: the server row reads "on". */

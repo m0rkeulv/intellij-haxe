@@ -60,7 +60,10 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       case BuildGroupNode buildGroup -> countRow(AllIcons.Nodes.Folder, buildGroup.label(), buildGroup.count());
       case CompilationGroupNode compilation -> labelRow(AllIcons.General.Settings, compilation.label());
       case CompilationServerNode server -> renderServer(server);
-      case ConnectionModeNode connectionMode -> renderConnectionMode(connectionMode);
+      case ServerInstanceNode serverInstance ->
+        valueRow(AllIcons.Webreferences.Server, HaxeBundle.message("haxe.toolwindow.node.server.instance"), serverInstance.label(), true);
+      case ConnectionModeNode connectionMode ->
+        valueRow(AllIcons.Webreferences.Server, HaxeBundle.message("haxe.toolwindow.node.connection.mode"), connectionMode.display(), true);
       case ActionsGroupNode actionsGroup -> countRow(AllIcons.Nodes.ConfigFolder, actionsGroup.label(), actionsGroup.count());
       case TestsGroupNode tests -> labelRow(AllIcons.Nodes.TestSourceFolder, tests.label());
       case ActionNode action -> renderAction(action);
@@ -148,11 +151,6 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
     }
   }
 
-  private void renderConnectionMode(@NotNull ConnectionModeNode connectionMode) {
-    Icon icon = connectionMode.live() ? ExecutionUtil.getLiveIndicator(AllIcons.Webreferences.Server) : AllIcons.Webreferences.Server;
-    valueRow(icon, HaxeBundle.message("haxe.toolwindow.node.connection.mode"), connectionMode.display(), true);
-  }
-
   private void renderSdk(@NotNull EnvSdkNode sdk) {
     setIcon(AllIcons.Nodes.PpJdk);
     append(HaxeBundle.message("haxe.toolwindow.node.environment.sdk"));
@@ -223,6 +221,7 @@ public final class HaxeToolWindowTreeRenderer extends ColoredTreeCellRenderer {
       case CompilationGroupNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.compilation");
       case EnvCompileCommandNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.compile.command");
       case CompilationServerNode server -> serverTooltip(server);
+      case ServerInstanceNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.server.instance");
       case ConnectionModeNode connectionMode ->
         HaxeBundle.message("haxe.toolwindow.tooltip.connection.mode", connectionMode.generation().getPresentableText());
       case EnvironmentNode ignored -> HaxeBundle.message("haxe.toolwindow.tooltip.environment");

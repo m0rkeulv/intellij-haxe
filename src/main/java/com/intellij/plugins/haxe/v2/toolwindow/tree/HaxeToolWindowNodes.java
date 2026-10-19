@@ -10,6 +10,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.L
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerSharing;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeServerGeneration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -457,7 +458,7 @@ public final class HaxeToolWindowNodes {
     }
   }
 
-  /** "Compilation" grouping row: the compile command and compilation server rows. */
+  /** "Compilation" grouping row: the compile command, compilation server, connection mode and server instance rows. */
   public record CompilationGroupNode(@NotNull String containerId) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
@@ -505,14 +506,30 @@ public final class HaxeToolWindowNodes {
   }
 
   /**
+   * Server instance row: whether the container's builds and compiler requests
+   * use its SDK's shared compilation server or a dedicated one with a cache of
+   * its own. Clicking chooses.
+   */
+  public record ServerInstanceNode(@NotNull String containerId, @NotNull HaxeServerSharing sharing)
+    implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "serverinstance";
+    }
+
+    @Override
+    public String label() {
+      return sharing.getPresentableText();
+    }
+  }
+
+  /**
    * Connection mode row: how the IDE reaches the compiler of this container's
-   * SDK. Clicking chooses the mode of every SDK of its server generation;
-   * {@code live} while the server it names runs.
+   * SDK. Clicking chooses the mode of every SDK of its server generation.
    */
   public record ConnectionModeNode(@NotNull String containerId,
                                    @NotNull HaxeServerGeneration generation,
-                                   @NotNull String display,
-                                   boolean live) implements HaxeToolWindowNode {
+                                   @NotNull String display) implements HaxeToolWindowNode {
     @Override
     public String expansionKey() {
       return "connection";

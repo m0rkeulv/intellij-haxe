@@ -14,6 +14,7 @@ import com.intellij.plugins.haxe.lang.psi.indexes.unified.HaxeClassNameUnifiedIn
 import com.intellij.plugins.haxe.lang.psi.indexes.unified.fqn.HaxeFullyQualifiedClassNameUnifiedIndex;
 import com.intellij.plugins.haxe.model.HaxeClassModel;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerAssignment;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerTypeCatalogService.GeneratedType;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
@@ -209,7 +210,7 @@ public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestC
     Connected completion = onPooledThread(() -> displayService.connectFor(context, DisplayMethods.COMPLETION));
 
     assertNotNull(completion, "the build server, started with --server-listen, answers completion");
-    boolean buildServerRuns = HaxeCompilationServerManager.getInstance(getProject()).runningPortForSdk(null) > 0;
+    boolean buildServerRuns = HaxeCompilationServerManager.getInstance(getProject()).runningPort(sharedServer().id()) > 0;
     assertTrue(buildServerRuns, "the requests went to the build server");
   }
 
@@ -220,6 +221,11 @@ public class HaxeLiveCompilerIntegrationTest extends HaxeCodeInsightFixtureTestC
    * again against the now-running server so the catalog stays stable for the
    * test's assertions.
    */
+  /** The project default SDK's shared server instance. */
+  private HaxeServerAssignment sharedServer() {
+    return HaxeServerAssignment.shared(getProject(), null);
+  }
+
   private void fillCatalogStably() {
     HaxeCompilerTypeCatalogService catalog = HaxeCompilerTypeCatalogService.getInstance(getProject());
     catalog.fillNowForTests();
