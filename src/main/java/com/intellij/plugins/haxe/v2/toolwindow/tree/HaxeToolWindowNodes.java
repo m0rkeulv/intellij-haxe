@@ -499,6 +499,11 @@ public final class HaxeToolWindowNodes {
   public record ServerFailureLink(@NotNull String containerId) {
   }
 
+  /** Renderer fragment tag on a row's value: clicking it opens the row's chooser, edit dialog or toggle. */
+  public enum RowValueLink {
+    INSTANCE
+  }
+
   /**
    * Connection mode row: how the IDE reaches the compiler of this container's
    * SDK. Clicking chooses the mode of every SDK of its server generation;
