@@ -5,6 +5,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListener;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeContainers;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
@@ -48,6 +49,17 @@ public final class HaxeLanguageLevelUtil {
     return sdk == null ? null : HaxeLanguageLevel.fromVersionString(sdk.getVersionString());
   }
 
+  /**
+   * The level implied by the named SDK's compiler, the configured SDK for a
+   * null name, as {@link #fromCompiler} reads it. Null when no SDK is
+   * registered or its version is unparsable.
+   */
+  @Nullable
+  public static HaxeLanguageLevel fromSdkName(@NotNull Project project, @Nullable String sdkName) {
+    Sdk sdk = HaxeToolPathResolver.findSdk(project, sdkName);
+    return sdk == null ? null : HaxeLanguageLevel.fromVersionString(sdk.getVersionString());
+  }
+
   /** The container's SDK, or the project-wide one for a null container. */
   @Nullable
   private static Sdk sdkFor(@NotNull Project project, @Nullable String containerId) {
@@ -87,6 +99,25 @@ public final class HaxeLanguageLevelUtil {
     if (semVer == null) return version;
     int number = semVer.getMajor() * 1000 + semVer.getMinor() * 100 + semVer.getPatch();
     return String.format(Locale.ROOT, "%d.%03d", number / 1000, number % 1000);
+  }
+
+  /**
+   * The label of the level a container takes without an override of its own:
+   * the project's explicit default, else its SDK's level, else the newest
+   * level while no SDK is registered.
+   */
+  @NotNull
+  public static String defaultLevelLabel(@Nullable HaxeLanguageLevel explicitDefault, @Nullable HaxeLanguageLevel sdkLevel) {
+    if (explicitDefault != null) return HaxeBundle.message("haxe.compiler.project.default.level", explicitDefault.getPresentableText());
+    if (sdkLevel != null) return HaxeBundle.message("haxe.compiler.sdk.level", sdkLevel.getPresentableText());
+    return HaxeBundle.message("haxe.compiler.no.sdk.level", HaxeLanguageLevel.latest().getPresentableText());
+  }
+
+  /** {@link #defaultLevelLabel(HaxeLanguageLevel, HaxeLanguageLevel)} for a container under the project's settings. */
+  @NotNull
+  public static String defaultLevelLabel(@NotNull Project project, @NotNull String containerId) {
+    HaxeLanguageLevel explicitDefault = HaxeCompilerSettings.getInstance(project).getExplicitDefaultLanguageLevel();
+    return defaultLevelLabel(explicitDefault, fromCompiler(project, containerId));
   }
 
   @NotNull

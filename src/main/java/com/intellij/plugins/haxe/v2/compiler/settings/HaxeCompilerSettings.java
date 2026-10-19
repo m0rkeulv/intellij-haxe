@@ -186,9 +186,14 @@ public interface HaxeCompilerSettings {
     return getEffectiveCompletionMode().usesCompiler();
   }
 
-  /** How display requests reach the compiler; see {@link HaxeDisplayConnectionMode}. */
+  /** How display requests reach the compiler of an SDK of the generation; see {@link HaxeDisplayConnectionMode}. */
   @NotNull
-  HaxeDisplayConnectionMode getDisplayConnectionMode();
+  HaxeDisplayConnectionMode getDisplayConnectionMode(@NotNull HaxeServerGeneration generation);
 
-  void setDisplayConnectionMode(@NotNull HaxeDisplayConnectionMode mode);
+  void setDisplayConnectionMode(@NotNull HaxeServerGeneration generation, @NotNull HaxeDisplayConnectionMode mode);
+
+  /** Whether an SDK of the generation sends its compiler requests to a dedicated display process rather than the shared server. */
+  default boolean usesDedicatedDisplayProcess(@NotNull HaxeServerGeneration generation) {
+    return getDisplayConnectionMode(generation) == HaxeDisplayConnectionMode.DEDICATED_PROCESS;
+  }
 }

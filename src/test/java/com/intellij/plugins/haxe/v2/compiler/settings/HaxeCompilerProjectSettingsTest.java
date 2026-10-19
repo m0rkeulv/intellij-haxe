@@ -62,11 +62,12 @@ public class HaxeCompilerProjectSettingsTest {
   }
 
   @Test
-  @DisplayName("display connection mode defaults to the dedicated process and survives xml round trip")
-  public void displayConnectionModeDefaultsToTheDedicatedProcessAndSurvivesXmlRoundTrip() {
+  @DisplayName("connection modes default to the dedicated process and survive xml round trip")
+  public void connectionModesDefaultToTheDedicatedProcessAndSurviveXmlRoundTrip() {
     HaxeCompilerProjectSettings settings = new HaxeCompilerProjectSettings(null);
-    assertEquals(HaxeDisplayConnectionMode.DEDICATED_PROCESS, settings.getDisplayConnectionMode());
-    settings.setDisplayConnectionMode(HaxeDisplayConnectionMode.SHARED_SERVER);
+    assertEquals(HaxeDisplayConnectionMode.DEDICATED_PROCESS, settings.getDisplayConnectionMode(HaxeServerGeneration.HAXE_4));
+    assertEquals(HaxeDisplayConnectionMode.DEDICATED_PROCESS, settings.getDisplayConnectionMode(HaxeServerGeneration.HAXE_3));
+    settings.setDisplayConnectionMode(HaxeServerGeneration.HAXE_3, HaxeDisplayConnectionMode.SHARED_SERVER);
 
     Element serialized = XmlSerializer.serialize(settings.getState());
     HaxeCompilerProjectSettings.State deserialized =
@@ -74,7 +75,9 @@ public class HaxeCompilerProjectSettingsTest {
     HaxeCompilerProjectSettings reloaded = new HaxeCompilerProjectSettings(null);
     reloaded.loadState(deserialized);
 
-    assertEquals(HaxeDisplayConnectionMode.SHARED_SERVER, reloaded.getDisplayConnectionMode());
+    assertEquals(HaxeDisplayConnectionMode.SHARED_SERVER, reloaded.getDisplayConnectionMode(HaxeServerGeneration.HAXE_3));
+    assertEquals(HaxeDisplayConnectionMode.DEDICATED_PROCESS, reloaded.getDisplayConnectionMode(HaxeServerGeneration.HAXE_4),
+                 "each generation keeps a mode of its own");
   }
 
   @Test

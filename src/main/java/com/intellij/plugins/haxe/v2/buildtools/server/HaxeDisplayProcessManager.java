@@ -1,31 +1,37 @@
 package com.intellij.plugins.haxe.v2.buildtools.server;
 
 import com.intellij.execution.ExecutionException;
+import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
+import com.intellij.plugins.haxe.display.client.JsonRpcDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.FramedDisplayChannel;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
-import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeDisplayConnectionMode;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeServerGeneration;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /// Runs one dedicated haxe display process per SDK in `--server-connect`
 /// mode: the IDE listens on a loopback port, haxe connects to it and keeps
 /// that connection for its lifetime, and requests travel as length-prefixed
-/// frames ([FramedDisplayChannel]). Against the shared `--wait` server every
+/// frames ([FramedDisplayChannel]). Haxe 3 has no `--server-connect`; its
+/// process runs as `--wait stdio`, and the same frames travel on its stdin
+/// and stderr. Against the shared `--wait` server every
 /// isolated request pays a 50 ms sleep in haxe's accept loop and queues
 /// behind builds; the dedicated process pays neither. It keeps a module cache
 /// of its own, so a context warms up in it separately.
@@ -49,6 +55,8 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
   /** How often the wait for the connection checks that the process still runs. */
   private static final int ACCEPT_POLL_MS = 200;
   private static final long START_FAILURE_COOLDOWN_MS = 10_000;
+  /** A stdio process has no port: its id counts on from above every port, so it never meets a port key. */
+  private static final AtomicInteger STDIO_IDS = new AtomicInteger(65_535);
 
   /** A server process plus the connection it opened to the IDE; alive only while that connection works. */
   static final class DisplayProcess extends HaxeServerProcess {
@@ -86,14 +94,13 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
 
   /**
    * The channel to the SDK's display process, started when needed. Null when
-   * the compilation server is disabled, the project is not trusted, the SDK's
-   * haxe has no {@code --server-connect}, or a start failed within the
-   * cooldown. Background threads only: a start waits for the process to
-   * connect.
+   * the compilation server is disabled, the project is not trusted, or a
+   * start failed within the cooldown. Background threads only: a start waits
+   * for the process to connect.
    */
   @Nullable
   public synchronized Channel channelFor(@Nullable String sdkName) {
-    if (!mayStart() || !supportsServerConnect(sdkName)) return null;
+    if (!mayStart()) return null;
     String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
     DisplayProcess process = processes.get(idFor(executablePath));
     if (process == null) {
@@ -107,14 +114,15 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
     return startLocked(process) > 0 ? new Channel(process.channel, process.port) : null;
   }
 
-  /** Whether the SDK's haxe has {@code --server-connect} (4.0 on); an SDK of unknown version is tried. */
-  private boolean supportsServerConnect(@Nullable String sdkName) {
-    Sdk sdk = HaxeToolPathResolver.findSdk(project, sdkName);
-    HaxeLanguageLevel level = sdk == null ? null : HaxeLanguageLevel.fromVersionString(sdk.getVersionString());
-    return level == null || level.isAtLeast(HaxeLanguageLevel.HAXE_4_0);
+  /** Makes the connection the project's choice for SDKs of the generation; leaving the dedicated processes stops them. */
+  public void chooseConnection(@NotNull HaxeServerGeneration generation, @NotNull HaxeDisplayConnectionMode mode) {
+    HaxeCompilerSettings settings = HaxeCompilerSettings.getInstance(project);
+    if (settings.getDisplayConnectionMode(generation) == mode) return;
+    settings.setDisplayConnectionMode(generation, mode);
+    if (mode == HaxeDisplayConnectionMode.SHARED_SERVER) stopAll();
   }
 
-  /** The {@link Channel#id()} (listen port) of the SDK's display process while it runs, or -1; starts nothing. */
+  /** The {@link Channel#id()} of the SDK's display process while it runs, or -1; starts nothing. */
   public synchronized int runningIdFor(@Nullable String sdkName) {
     String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
     DisplayProcess process = processes.get(idFor(executablePath));
@@ -123,23 +131,48 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
 
   @Override
   protected int startLocked(@NotNull DisplayProcess process) {
-    try (ServerSocket listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-      listener.setSoTimeout(ACCEPT_POLL_MS);
-      int port = listener.getLocalPort();
-      startProcess(process, serverCommandLine(process, "--server-connect", HaxeCompilationServerManager.SERVER_HOST + ":" + port));
-      Socket connection = acceptWhileRunning(listener, process);
-      process.channel = new FramedDisplayChannel(connection);
-      process.port = port;
+    try {
+      if (HaxeServerGenerations.of(project, process.sdkName) == HaxeServerGeneration.HAXE_3) {
+        connectOverStdio(process);
+      }
+      else {
+        connectOverSocket(process);
+      }
       process.failedAt = 0;
-      log.info("Started haxe display process on loopback port " + port + " (" + process.executablePath + ")");
       fireStateChanged();
-      return port;
+      return process.port;
     } catch (ExecutionException | IOException e) {
       log.info("haxe display process failed to start (" + process.executablePath + "): " + e.getMessage());
       process.failedAt = System.currentTimeMillis();
       stopProcessLocked(process);
       return -1;
     }
+  }
+
+  /** Haxe 4 on connects back to a loopback port the IDE listens on, and the frames travel on that socket. */
+  private void connectOverSocket(@NotNull DisplayProcess process) throws ExecutionException, IOException {
+    try (ServerSocket listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+      listener.setSoTimeout(ACCEPT_POLL_MS);
+      int port = listener.getLocalPort();
+      String address = HaxeCompilationServerManager.SERVER_HOST + ":" + port;
+      startProcess(process, serverCommandLine(process, "--server-connect", address));
+      Socket connection = acceptWhileRunning(listener, process);
+      process.channel = new FramedDisplayChannel(connection);
+      process.port = port;
+      log.info("Started haxe display process on loopback port " + port + " (" + process.executablePath + ")");
+    }
+  }
+
+  /** Haxe 3 reads the frames on its stdin and answers on its stderr; closing the channel ends the process. */
+  private void connectOverStdio(@NotNull DisplayProcess process) throws ExecutionException {
+    startStdioProcess(process, serverCommandLine(process, HaxeServerGeneration.HAXE_3.listenFlag(), "stdio"));
+    OSProcessHandler handler = process.handler();
+    if (handler == null) throw new ExecutionException("the process exited at once");
+    InputStream stderr = handler.getProcess().getErrorStream();
+    String description = "haxe display process over stdio (" + process.executablePath + ")";
+    process.channel = FramedDisplayChannel.overStdio(stderr, handler.getProcessInput(), handler::destroyProcess, description);
+    process.port = STDIO_IDS.incrementAndGet();
+    log.info("Started " + description);
   }
 
   /**
@@ -188,6 +221,6 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
       if (process == null || !process.isAlive()) throw new DisplayRequestException("display process " + id + " is not running");
       channel = process.channel;
     }
-    return new HaxeDisplayClient(channel).serverMemory(List.of());
+    return new JsonRpcDisplayClient(channel).serverMemory(List.of());
   }
 }

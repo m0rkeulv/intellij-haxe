@@ -168,7 +168,16 @@ abstract class HaxeServerProcessManager<P extends HaxeServerProcess> implements 
 
   /** Launches the command for the process and routes its termination back here. */
   protected final void startProcess(@NotNull P process, @NotNull GeneralCommandLine commandLine) throws ExecutionException {
-    process.start(commandLine, this::terminatedMessage, (handler, exitCode) -> onTerminated(process, handler, exitCode));
+    launch(process, commandLine, false);
+  }
+
+  /** {@link #startProcess} for a server that talks over its pipes: its stdin and stderr carry frames. */
+  protected final void startStdioProcess(@NotNull P process, @NotNull GeneralCommandLine commandLine) throws ExecutionException {
+    launch(process, commandLine, true);
+  }
+
+  private void launch(@NotNull P process, @NotNull GeneralCommandLine commandLine, boolean stdio) throws ExecutionException {
+    process.start(commandLine, stdio, this::terminatedMessage, (handler, exitCode) -> onTerminated(process, handler, exitCode));
   }
 
   private synchronized void onTerminated(@NotNull P process, @NotNull OSProcessHandler handler, int exitCode) {

@@ -49,7 +49,7 @@ public class HaxeDisplayClientObserverTest {
   }
 
   private HaxeDisplayClient clientOver(DisplayChannel channel) {
-    HaxeDisplayClient client = new HaxeDisplayClient(channel);
+    HaxeDisplayClient client = new JsonRpcDisplayClient(channel);
     client.setObserver(observer);
     return client;
   }

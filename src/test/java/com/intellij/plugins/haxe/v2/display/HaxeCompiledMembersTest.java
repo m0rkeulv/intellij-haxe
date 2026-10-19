@@ -2,10 +2,10 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.plugins.haxe.display.protocol.JsonPos;
 import com.intellij.plugins.haxe.display.protocol.JsonTypeRef;
+import com.intellij.plugins.haxe.display.protocol.ProtocolJson;
 import com.intellij.plugins.haxe.display.protocol.server.TypeBlueprint;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -66,7 +66,7 @@ public class HaxeCompiledMembersTest {
   }
 
   private static TypeBlueprint.Member member(String name, String wireType, JsonPos pos) {
-    return new TypeBlueprint.Member(name, JsonTypeRef.of(JsonMapper.builder().build().readTree(wireType)), "FVar", pos);
+    return new TypeBlueprint.Member(name, ProtocolJson.MAPPER.readValue(wireType, JsonTypeRef.class), "FVar", pos);
   }
 
   /** The byte range of a declaration's text in the file on disk. */

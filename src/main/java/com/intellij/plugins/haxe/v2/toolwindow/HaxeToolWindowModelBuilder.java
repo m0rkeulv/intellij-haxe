@@ -4,6 +4,8 @@ import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManag
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeBuildToolFailures;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeEffectiveBuildFileInfo;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerGenerations;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
@@ -19,7 +21,10 @@ import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeProgramLaunches;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
+import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeDisplayConnectionMode;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeServerGeneration;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.*;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.util.execution.ParametersListUtil;
@@ -81,6 +86,7 @@ final class HaxeToolWindowModelBuilder {
                         EnvironmentData environment,
                         EnvCompileCommandNode compileCommand,
                         CompilationServerNode server,
+                        ConnectionModeNode connectionMode,
                         List<ToolNode> tools,
                         boolean userConfigured) {
 
@@ -113,12 +119,13 @@ final class HaxeToolWindowModelBuilder {
       EnvCompileCommandNode compileCommand = compileCommandNode(raw.id(), raw.files(), testsPaths);
       EnvironmentData environment = buildEnvironmentData(raw.id());
       CompilationServerNode server = compilationServerNode(raw.id(), compileCommand.connectEligible());
+      ConnectionModeNode connectionMode = connectionModeNode(raw.id(), server);
       List<String> markedTestsPaths = HaxeTestsBuildFileStore.getInstance(project).getTestsFilePaths(raw.id());
       List<ToolNode> tools = containerTools(raw);
       boolean userConfigured = hasUserConfiguration(raw.id());
       ContainerEntry container = new ContainerEntry(raw.id(), raw.displayName(), raw.projectRoot(), raw.files(),
                                                     activePath, testsPaths, markedTestsPaths, environment, compileCommand,
-                                                    server, tools, userConfigured);
+                                                    server, connectionMode, tools, userConfigured);
       containers.add(container);
     }
     return containers;
@@ -456,15 +463,8 @@ final class HaxeToolWindowModelBuilder {
     HaxeLanguageLevel levelOverride = compilerSettings.getContainerLanguageLevelOverride(containerId);
     String levelDisplay = levelOverride != null
                           ? levelOverride.getPresentableText()
-                          : defaultLevelDisplay(compilerSettings, containerId);
+                          : HaxeLanguageLevelUtil.defaultLevelLabel(project, containerId);
     return new EnvironmentData(sdkDisplay, sdkMissing, levelDisplay);
-  }
-
-  /** The "Project default (X)" label following the compiler settings' per-container default level. */
-  @NotNull
-  private static String defaultLevelDisplay(@NotNull HaxeCompilerSettings settings, @NotNull String containerId) {
-    String defaultLevel = settings.getDefaultLanguageLevel(containerId).getPresentableText();
-    return HaxeBundle.message("haxe.toolwindow.node.environment.sdk.default", defaultLevel);
   }
 
   @NotNull
@@ -499,4 +499,30 @@ final class HaxeToolWindowModelBuilder {
     return new CompilationServerNode(containerId, display, projectEnabled, moduleUses, running, connectEligible,
                                      contextFailure);
   }
+
+  /**
+   * The container's connection mode row: the mode of its SDK's server
+   * generation, live while the server it names runs; off while the
+   * compilation server does not serve the container.
+   */
+  @NotNull
+  private ConnectionModeNode connectionModeNode(@NotNull String containerId, @NotNull CompilationServerNode server) {
+    String sdkName = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
+    HaxeServerGeneration generation = HaxeServerGenerations.known(project, sdkName);
+    if (!servesRequests(server)) {
+      return new ConnectionModeNode(containerId, generation, HaxeBundle.message("haxe.toolwindow.connection.mode.off"), false);
+    }
+    HaxeDisplayConnectionMode mode = HaxeCompilerSettings.getInstance(project).getDisplayConnectionMode(generation);
+    boolean live = mode == HaxeDisplayConnectionMode.DEDICATED_PROCESS
+                   ? HaxeDisplayProcessManager.getInstance(project).runningIdFor(sdkName) > 0
+                   : server.running();
+    return new ConnectionModeNode(containerId, generation, mode.getPresentableText(generation), live);
+  }
+
+  /** Whether the compilation server serves the container's compiler requests: the server row reads "on". */
+  private boolean servesRequests(@NotNull CompilationServerNode server) {
+    if (!HaxeProjectTrust.isTrusted(project)) return false;
+    return server.projectEnabled() && server.moduleUses() && server.connectEligible();
+  }
+
 }
