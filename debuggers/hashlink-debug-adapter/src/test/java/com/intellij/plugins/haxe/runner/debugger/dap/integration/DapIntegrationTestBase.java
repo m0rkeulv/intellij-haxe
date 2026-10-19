@@ -68,6 +68,7 @@ public abstract class DapIntegrationTestBase {
 
   protected static final String FIXTURE_RICH = "Rich.hx";
   protected static final int FIXTURE_RICH_LINE = 42; // Rich.demo(): arrays/dyn/enum/anon/closure/ref/dynobj/maps/structs
+  protected static final int FIXTURE_RICH_CAPTURES_LINE = 56; // Rich.captures(): shiftFixed/shift/scale close over read-only locals
 
   protected static final String FIXTURE_IFACE = "Iface.hx";
   protected static final int FIXTURE_IFACE_LINE = 54; // Iface.demo(): task + asIface in scope

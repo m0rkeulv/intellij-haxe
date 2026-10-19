@@ -266,6 +266,51 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
     request(new DisconnectRequest());
   }
 
+  /** (closure local, the captured environment the view and the pre-filled `<closure>.captured` path show). */
+  static final List<Arguments> CAPTURE_SHAPES = List.of(
+    // one captured Int travels in a tuple: the environment slot holds a pointer
+    arguments("shiftFixed", "(10)"),
+    // one captured Null<Int> is a pointer already: its box is the environment
+    arguments("shift", "20"),
+    // several captured values travel in a tuple, in declaration order
+    arguments("scale", "(10, 20)"));
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("captureShapes")
+  @DisplayName("renders a closure's read-only capture environment")
+  public void rendersAClosuresReadOnlyCaptureEnvironment(String closure, String environment) throws Exception {
+    StoppedEvent stopped = runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_CAPTURES_LINE);
+    int frameId = topFrameId(stopped.getBody().getThreadId());
+    Variable local = findVariable(variables(localsScopeReference(frameId)), closure);
+    assertNotNull(local, "local " + closure + " present");
+
+    Variable captured = findVariable(variables(local.getVariablesReference()), "captured");
+
+    assertNotNull(captured, "captured child present");
+    assertEquals(environment, captured.getValue(), "the environment shows its captured values");
+    assertEquals(environment, evaluated(frameId, closure + ".captured"), "the pre-filled path evaluates to the same");
+    request(new DisconnectRequest());
+  }
+
+  static Stream<Arguments> captureShapes() {
+    return CAPTURE_SHAPES.stream();
+  }
+
+  @Test
+  @DisplayName("a tuple environment expands to its captured values")
+  public void aTupleEnvironmentExpandsToItsCapturedValues() throws Exception {
+    StoppedEvent stopped = runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_CAPTURES_LINE);
+    int frameId = topFrameId(stopped.getBody().getThreadId());
+    Variable scale = findVariable(variables(localsScopeReference(frameId)), "scale");
+    Variable captured = findVariable(variables(scale.getVariablesReference()), "captured");
+
+    assertEquals("Tuple", captured.getType());
+    assertEquals(Map.of("0", "10", "1", "20"), variablesByName(captured.getVariablesReference()));
+    assertEquals("20", evaluated(frameId, "scale.captured[1]"), "a tuple slot by index");
+
+    request(new DisconnectRequest());
+  }
+
   @Test
   @DisplayName("reads packed struct field")
   public void readsPackedStructField() throws Exception {
