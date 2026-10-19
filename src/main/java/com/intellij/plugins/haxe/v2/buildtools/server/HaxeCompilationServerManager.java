@@ -7,7 +7,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.display.client.HaxeDisplayClient;
+import com.intellij.plugins.haxe.display.client.JsonRpcDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.v2.buildtools.*;
@@ -22,7 +22,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Runs the project's haxe compilation servers ({@code haxe --wait <port>}).
+ * Runs the project's haxe compilation servers ({@code haxe --server-listen <port>}, {@code --wait} on haxe 3).
  * A server's cache belongs to one haxe BINARY, and a project whose modules
  * use different SDKs can need several haxe versions at once. The manager
  * therefore runs one server process per resolved haxe executable and keys
@@ -96,7 +96,7 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
   public ServerMemory fetchMemory(@NotNull String id) throws DisplayRequestException {
     int port = runningPort(id);
     if (port <= 0) throw new DisplayRequestException("compilation server " + id + " is not running");
-    return new HaxeDisplayClient(SERVER_HOST, port).serverMemory(List.of());
+    return new JsonRpcDisplayClient(SERVER_HOST, port).serverMemory(List.of());
   }
 
   @Override
@@ -104,7 +104,8 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
     HaxeBuildToolSettings settings = HaxeBuildToolSettings.getInstance(project);
     try {
       int chosenPort = choosePortLocked(settings, process);
-      startProcess(process, serverCommandLine(process, "--wait", String.valueOf(chosenPort)));
+      String listenFlag = HaxeServerGenerations.of(project, process.sdkName).listenFlag();
+      startProcess(process, serverCommandLine(process, listenFlag, String.valueOf(chosenPort)));
       process.port = chosenPort;
       log.info("Started haxe compilation server on port " + chosenPort + " (" + process.executablePath + ")");
       fireStateChanged();

@@ -90,6 +90,7 @@ final class HaxeToolWindowTreeBuilder {
     DefaultMutableTreeNode compilationNode = new DefaultMutableTreeNode(new CompilationGroupNode(container.id()));
     compilationNode.add(new DefaultMutableTreeNode(container.compileCommand()));
     compilationNode.add(new DefaultMutableTreeNode(container.server()));
+    compilationNode.add(new DefaultMutableTreeNode(container.connectionMode()));
     return compilationNode;
   }
 

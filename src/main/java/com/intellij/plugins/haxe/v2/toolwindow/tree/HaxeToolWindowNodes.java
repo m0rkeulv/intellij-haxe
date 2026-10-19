@@ -10,6 +10,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore.L
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeCustomActionsStore;
 import com.intellij.plugins.haxe.v2.runconfig.HaxeLaunchKind;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
+import com.intellij.plugins.haxe.v2.compiler.settings.HaxeServerGeneration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -496,6 +497,26 @@ public final class HaxeToolWindowNodes {
 
   /** Renderer fragment tag on the server row's failure text: clicking it opens the server console's status view. */
   public record ServerFailureLink(@NotNull String containerId) {
+  }
+
+  /**
+   * Connection mode row: how the IDE reaches the compiler of this container's
+   * SDK. Clicking chooses the mode of every SDK of its server generation;
+   * {@code live} while the server it names runs.
+   */
+  public record ConnectionModeNode(@NotNull String containerId,
+                                   @NotNull HaxeServerGeneration generation,
+                                   @NotNull String display,
+                                   boolean live) implements HaxeToolWindowNode {
+    @Override
+    public String expansionKey() {
+      return "connection";
+    }
+
+    @Override
+    public String label() {
+      return display;
+    }
   }
 
   /**
