@@ -40,9 +40,9 @@ import java.util.List;
  * The settings edits tree rows offer: choosers, the custom-target prompt, the
  * compile command dialog, the server toggle and the confirmed removals. The
  * stores publish every change, so the tree refreshes on its own. Module
- * libraries come from the module's current build context (see
- * {@link HaxeLibrarySync}), so changing the target, the section or the build
- * command's file re-syncs them.
+ * libraries come from the module's build files (see {@link HaxeLibrarySync}),
+ * so changing the target or the section re-syncs them; changing the build
+ * command does not.
  */
 public final class HaxeToolWindowEditors {
 

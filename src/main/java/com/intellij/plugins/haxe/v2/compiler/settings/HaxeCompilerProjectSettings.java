@@ -25,7 +25,7 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   public static final class State {
     public String defaultLanguageLevel = USE_COMPILER_LEVEL;
     // keys are CONTAINER ids (module name, or /project-root); the field
-    // name predates non-module containers and stays for storage compatibility
+    // name is the option name stored in haxeCompiler.xml
     public Map<String, String> moduleLanguageLevels = new TreeMap<>();
     public boolean compilerDiagnostics = false;
     public boolean compilerDiagnosticsErrors = true;

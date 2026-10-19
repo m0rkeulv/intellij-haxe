@@ -18,7 +18,7 @@ import java.util.List;
 /// answer is XML, JSON or plain text by mode, with no envelope, and a failure
 /// is the compiler's error text with the error marker. Haxe 3 has no method
 /// list: [#METHODS] is what it answers, and the server introspection,
-/// completion-item resolve and metadata requests throw.
+/// completion-item resolve, metadata and `typer/compiledTypes` requests throw.
 ///
 /// Haxe 3 counts a request's offset and its results' columns in UTF-8 bytes;
 /// the client converts them from and to characters ([Haxe3SourceText]). An

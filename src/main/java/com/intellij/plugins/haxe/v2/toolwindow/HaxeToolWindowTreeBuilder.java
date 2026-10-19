@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  * Turns the model builder's container entries into the tool window's Swing
  * tree, Gradle-style: one project node holding the project root's groups and
  * the modules. A pure transformation of the prepared model plus the target
- * selection store - no read action needed. With {@code hideEmptyNodes}, a
+ * selection store and the library graph - no read action needed. With {@code hideEmptyNodes}, a
  * grouping row without children and an unset value row are left out.
  */
 final class HaxeToolWindowTreeBuilder {

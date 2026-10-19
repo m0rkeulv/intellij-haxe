@@ -20,7 +20,7 @@ public record JsonClassField(String name, JsonTypeRef type, boolean isPublic, In
   @JsonSubTypes(@JsonSubTypes.Type(value = Kind.Var.class, name = "FVar"))
   public sealed interface Kind {
 
-    /** FVar, FMethod, FProp. */
+    /** FVar or FMethod (a property is an FVar with accessor access). */
     String kind();
 
     /** A variable's read access kind (AccNormal, AccCall, AccNever, AccNo, ...); empty for anything else. */

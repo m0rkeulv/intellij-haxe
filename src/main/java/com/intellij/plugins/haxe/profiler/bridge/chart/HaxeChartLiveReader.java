@@ -56,8 +56,8 @@ interface HaxeChartLiveReader {
    * Zone stores: the record index rescans from scratch on every reload
    * (headers only, payloads are skipped), so growth gates on the file size
    * and the poll runs slower. The activity curve folds incrementally from
-   * the newly appended chunks; refolding the whole file made each refresh
-   * slower than the last.
+   * the newly appended chunks; a whole-file refold would grow each refresh's
+   * cost with the file.
    */
   static HaxeChartLiveReader forZones(Path sessionFile) {
     return new HaxeChartLiveReader() {

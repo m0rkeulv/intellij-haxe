@@ -31,8 +31,8 @@ import java.util.List;
  * compiler's suggestions become quick fixes (imports, spelling corrections
  * and the missing members). Unused imports and removable code have their own
  * annotators and toggles. Opt-in on the Haxe Compiler settings page; requires
- * the compilation server and haxe 4.3 or newer, which added the JSON-RPC
- * diagnostics method.
+ * the compilation server and haxe 4.3.5 or newer (the JSON-RPC diagnostics
+ * method), or the Haxe 3 display lane.
  */
 public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnnotatorBase {
 

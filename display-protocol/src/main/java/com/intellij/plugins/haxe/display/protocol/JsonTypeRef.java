@@ -39,10 +39,12 @@ public sealed interface JsonTypeRef {
     return this instanceof NamedType;
   }
 
+  /** Whether this is a function type (TFun). */
   default boolean isFunction() {
     return this instanceof FunctionType;
   }
 
+  /** Whether this is {@code Dynamic} (TDynamic). */
   default boolean isDynamic() {
     return this instanceof DynamicType;
   }
@@ -52,6 +54,7 @@ public sealed interface JsonTypeRef {
     return this instanceof Monomorph;
   }
 
+  /** Whether this is an anonymous structure (TAnonymous). */
   default boolean isAnonymous() {
     return this instanceof AnonymousType;
   }
@@ -139,7 +142,7 @@ public sealed interface JsonTypeRef {
     }
   }
 
-  /** A function type. */
+  /** A function type (TFun): its parameters and return type. */
   record FunctionType(Signature args) implements JsonTypeRef {
 
     /** The {@code args} of a function type: its arguments and return type. */
@@ -176,7 +179,7 @@ public sealed interface JsonTypeRef {
     }
   }
 
-  /** An anonymous structure. */
+  /** An anonymous structure (TAnonymous): its fields and their types. */
   record AnonymousType(Fields args) implements JsonTypeRef {
 
     /** The {@code args} of an anonymous structure: its fields. */

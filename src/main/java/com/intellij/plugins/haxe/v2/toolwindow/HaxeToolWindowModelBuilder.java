@@ -140,9 +140,10 @@ final class HaxeToolWindowModelBuilder {
 
   /**
    * The container's tool rows: commands for tool configs detected at the container
-   * root, then the user's custom tools. Everything runs in the container root so
+   * root, then the user's custom tools. Detected tools run in the container root so
    * the tools' own config discovery and relative excludes resolve as if run there;
    * haxelib forwards that directory to the tool (the HAXELIB_RUN cwd convention).
+   * A custom tool runs in its stored work directory, the container root when blank.
    */
   @NotNull
   private List<ToolNode> containerTools(@NotNull RawContainer raw) {
@@ -312,7 +313,9 @@ final class HaxeToolWindowModelBuilder {
   /**
    * The build file's runnable actions: defaults for its type (using the file's
    * selected target and its container's environment SDK) plus its custom actions.
-   * Everything runs in the build file's own directory.
+   * Actions run in the build file's work directory ({@code HaxeBuildWorkDirectories})
+   * unless they name their own: a default action its build system's, a custom
+   * action its stored one.
    */
   @NotNull
   private List<ActionNode> buildFileActions(@NotNull String containerId,

@@ -115,7 +115,7 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
     // An Array<()->Int> element reaches its value through a DYNAMIC slot: the
     // runtime fun-type header must resolve (RuntimeTypes KFUN) so the element
     // renders like a statically typed closure variable — name and signature —
-    // instead of a bare "Dynamic" (user-reported).
+    // instead of a bare "Dynamic".
     StoppedEvent stopped = runToBreakpoint(FIXTURE_CLOSURE, FIXTURE_CLOSURE_REAL_ARRAY_LINE);
     List<Variable> locals = topFrameVariables(stopped.getBody().getThreadId());
     Variable callbacks = findVariable(locals, "callbacks");
@@ -458,7 +458,7 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
   @Test
   @DisplayName("evaluates string local length")
   public void evaluatesStringLocalLength() throws Exception {
-    // the reported case: `s.length` on a plain String local (s = "orig10")
+    // `s.length` on a plain String local (s = "orig10")
     runToBreakpoint(FIXTURE_CALL, FIXTURE_CALL_LINE);
     int frameId = topFrameId(lastStoppedThreadId());
 
@@ -483,9 +483,9 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
     request(new DisconnectRequest());
   }
 
-  // Class-qualified statics stop in Main (NOT Config / pkg.Deep): the class
-  // names must resolve from a FOREIGN frame, which the locals → this →
-  // frame-statics order cannot.
+  // --- class-qualified statics (stopped in Main, a foreign frame) ---
+  // NOT Config / pkg.Deep: the class names must resolve from a FOREIGN frame,
+  // which the locals → this → frame-statics order cannot.
 
   @Test
   @DisplayName("evaluates class qualified statics from a foreign frame")
@@ -498,9 +498,9 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
     assertEquals("\"cfg\"", evaluated(frameId, "Config.title"), "Config.title");
     // a PACKAGED class: the dotted class prefix spans path segments
     assertEquals("99", evaluated(frameId, "pkg.Deep.marker"), "pkg.Deep.marker");
-    // a function-typed static var (Null<Int->Void>) resolves by FQN — regression:
-    // HFun statics were dropped as if they were methods, so this used to fail with
-    // `"...Config" has no field "onBump"`
+    // a function-typed static var (Null<Int->Void>) resolves by FQN: an HFun
+    // static is a field, not a method (dropped as one, this fails with
+    // `"...Config" has no field "onBump"`)
     assertTrue(evaluate(frameId, "Config.onBump").isSuccess(), "Config.onBump resolves");
 
     request(new DisconnectRequest());
@@ -675,7 +675,7 @@ public class VariablesIntegrationTest extends DapIntegrationTestBase {
     // intMap has 2->"v2"; String values are pointers (no boxing needed)
     assertEquals("\"v2\"", evaluated(frameId, "intMap.get(2)"), "intMap.get(2)");
 
-    // MUTATE the map via its own method — the value-manipulation prize. A
+    // MUTATE the map via its own method. A
     // String value is dynamic-compatible, so no boxing is required. The
     // insertion is proven by reading the new key back through get() (a missing
     // key returns null), the honest end-to-end signal.

@@ -25,7 +25,8 @@ import java.util.Locale;
  * The language level editor features assume for a PSI element. An element
  * gets the effective level of its container, usually its module, as set in
  * Settings | Compiler | Haxe Compiler or in the tool window's Language level
- * row. Library and SDK elements use the level of the active build container.
+ * row. Library and SDK elements use the level of the container of the build
+ * they are analysed under (their resolve context), else of the active build.
  * Project files outside every module use the project-root container, which
  * follows the project default unless it has an override. Call in a read
  * action.

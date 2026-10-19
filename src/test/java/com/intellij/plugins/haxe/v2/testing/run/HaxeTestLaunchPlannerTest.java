@@ -425,7 +425,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
   @Test
   @DisplayName("munit on the interpreter is refused")
   public void testMunitOnTheInterpreterIsRefused() {
-    // munit predates the eval target and hangs there - verified live
+    // munit predates the eval target and hangs there
     String path = fixturePath("targets/munit-interp.hxml");
     ExecutionException refusal =
       assertThrows(ExecutionException.class, () -> HaxeTestLaunchPlanner.plan(getProject(), path, null, false));
