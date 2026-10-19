@@ -7,9 +7,10 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.display.client.JsonRpcDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
+import com.intellij.plugins.haxe.display.transport.DisplayChannel;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
+import com.intellij.plugins.haxe.display.transport.HaxeDisplayTransport;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
 import com.intellij.util.net.NetUtils;
@@ -19,7 +20,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 
 /**
  * Runs the project's haxe compilation servers ({@code haxe --server-listen <port>}, {@code --wait} on haxe 3).
@@ -92,11 +92,18 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
   }
 
   @Override
-  @NotNull
+  @Nullable
   public ServerMemory fetchMemory(@NotNull String id) throws DisplayRequestException {
     int port = runningPort(id);
     if (port <= 0) throw new DisplayRequestException("compilation server " + id + " is not running");
-    return new JsonRpcDisplayClient(SERVER_HOST, port).serverMemory(List.of());
+    DisplayChannel channel = HaxeDisplayTransport.socketPerRequest(SERVER_HOST, port);
+    return HaxeServerProcesses.memoryOf(project, sdkNameOf(id), channel);
+  }
+
+  @Nullable
+  private synchronized String sdkNameOf(@NotNull String id) {
+    HaxeServerProcess process = processes.get(id);
+    return process == null ? null : process.sdkName;
   }
 
   @Override
