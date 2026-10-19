@@ -49,6 +49,7 @@ public final class Haxe3DisplayClient implements HaxeDisplayClient {
   private static final String USAGE_MODE = "usage";
   private static final String TOPLEVEL_MODE = "toplevel";
   private static final String DIAGNOSTICS_MODE = "diagnostics";
+  private static final String MEMORY_MODE = "memory";
   private static final String FIELD_MODE = "";
 
   private final ObservedChannel channel;
@@ -165,6 +166,19 @@ public final class Haxe3DisplayClient implements HaxeDisplayClient {
   @Override
   public ServerMemory serverMemory(List<String> baseArgs) throws DisplayRequestException {
     throw unsupported(DisplayMethods.SERVER_MEMORY);
+  }
+
+  /**
+   * Asks for the server's cache report. Haxe 3 has no {@code server/memory}:
+   * it answers {@code --display memory} by printing the report to its own
+   * standard output, so nothing comes back to the requester.
+   */
+  public void requestMemoryReport() throws DisplayRequestException {
+    List<String> args = List.of(DISPLAY_FLAG, MEMORY_MODE);
+    DisplayResponse response = channel.observed(DisplayMethods.SERVER_MEMORY, () -> channel.channel().request(args, readTimeoutMs));
+    if (!response.hasError()) return;
+    String detail = DisplayFailures.failureDetail(response);
+    throw new DisplayRequestException("Display request '%s' failed: %s".formatted(DisplayMethods.SERVER_MEMORY, detail), true);
   }
 
   @Override

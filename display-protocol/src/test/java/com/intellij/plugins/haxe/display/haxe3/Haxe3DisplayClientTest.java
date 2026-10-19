@@ -72,6 +72,22 @@ public class Haxe3DisplayClientTest {
   }
 
   @Test
+  @DisplayName("a memory report asks display memory")
+  public void aMemoryReportAsksDisplayMemory() throws Exception {
+    client.requestMemoryReport();
+
+    assertEquals(List.of("--display", "memory"), channel.requests.getFirst());
+  }
+
+  @Test
+  @DisplayName("a refused memory report throws")
+  public void aRefusedMemoryReportThrows() {
+    channel.failing("Error: unknown display mode");
+
+    assertThrows(DisplayRequestException.class, () -> client.requestMemoryReport());
+  }
+
+  @Test
   @DisplayName("hover asks inside the identifier at its byte offset")
   public void hoverAsksInsideTheIdentifierAtItsByteOffset() throws Exception {
     int countOffset = MAIN_HX_SOURCE.indexOf("count");

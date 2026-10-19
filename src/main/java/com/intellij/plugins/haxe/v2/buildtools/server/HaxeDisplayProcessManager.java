@@ -5,7 +5,6 @@ import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.plugins.haxe.HaxeBundle;
-import com.intellij.plugins.haxe.display.client.JsonRpcDisplayClient;
 import com.intellij.plugins.haxe.display.protocol.server.ServerMemory;
 import com.intellij.plugins.haxe.display.transport.DisplayRequestException;
 import com.intellij.plugins.haxe.display.transport.FramedDisplayChannel;
@@ -23,7 +22,6 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /// Runs one dedicated haxe display process per SDK in `--server-connect`
@@ -213,14 +211,16 @@ public final class HaxeDisplayProcessManager extends HaxeServerProcessManager<Ha
   }
 
   @Override
-  @NotNull
+  @Nullable
   public ServerMemory fetchMemory(@NotNull String id) throws DisplayRequestException {
     FramedDisplayChannel channel;
+    String sdkName;
     synchronized (this) {
       DisplayProcess process = processes.get(id);
       if (process == null || !process.isAlive()) throw new DisplayRequestException("display process " + id + " is not running");
       channel = process.channel;
+      sdkName = process.sdkName;
     }
-    return new JsonRpcDisplayClient(channel).serverMemory(List.of());
+    return HaxeServerProcesses.memoryOf(project, sdkName, channel);
   }
 }
