@@ -402,7 +402,7 @@ final class HaxeToolWindowModelBuilder {
     String display = StringUtil.trimTrailing(baseAction.presentableCommand() + " " + compileCommand.arguments());
     String shown = stored == null ? HaxeBundle.message("haxe.toolwindow.compile.command.default", display) : display;
     String environmentSdk = store.getSdkName(containerId);
-    boolean connectEligible = HaxeCompileCommands.connectEligible(project, environmentSdk, command, buildFile.file());
+    boolean connectEligible = HaxeCompileCommands.connectEligible(project, environmentSdk, command);
     return new EnvCompileCommandNode(containerId, shown, command, baseAction.workDirectory(), candidatePaths,
                                      actionNamesByFile, defaultPath, connectEligible);
   }
