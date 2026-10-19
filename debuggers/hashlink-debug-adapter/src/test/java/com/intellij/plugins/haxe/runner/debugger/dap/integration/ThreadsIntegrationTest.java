@@ -69,9 +69,9 @@ public class ThreadsIntegrationTest extends DapIntegrationTestBase {
     // The worker parks on gate.wait() (never released). Stepping over it plants
     // a landing that is never reached — CORRECT debugger semantics is to keep
     // the session running with the step pending (exactly like stepping over an
-    // infinite loop): no hang, no fake stop, and — the regression part — no
-    // wedged adapter. Before the Handled-event fixes, stray thread-lifecycle
-    // events during the resume dance could freeze the whole debuggee.
+    // infinite loop): no hang, no fake stop, and no wedged adapter - stray
+    // thread-lifecycle events during the resume dance must not freeze the
+    // debuggee.
     initialize();
     assertTrue(launch(threadsFixtureHl.toString()).isSuccess(), "launch succeeds");
     assertTrue(setBreakpoint("Threads.hx", BLOCK_LINE).isSuccess(), "breakpoint set");

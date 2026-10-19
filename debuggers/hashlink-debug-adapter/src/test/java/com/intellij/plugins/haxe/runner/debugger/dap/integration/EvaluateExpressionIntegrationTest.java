@@ -8,14 +8,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Operator expressions over statics. A bare path is read through the
- * evaluator's own tolerant lookup, but an OPERATOR expression reads each
- * operand through the write-target resolver — so a root that is not a local
- * and not a field of `this` (a class name!) took a different code path, and
- * probing "is this.<root> a field?" threw instead of falling through to the
- * class-prefix resolution. In an instance frame that turned every
- * `Cls.member + x` into `"this.<pkg-root>" cannot be resolved to a writable
- * location`; a static frame has no `this` to probe and was unaffected.
+ * Operator expressions over statics, and the indexed children the variables
+ * view names. A bare path is read through the evaluator's own tolerant
+ * lookup, but an OPERATOR expression reads each operand through the
+ * write-target resolver, where a root that is neither a local nor a field of
+ * `this` (a class name) falls through to the class-prefix resolution. Pinned
+ * for class-qualified, package-qualified and unqualified statics, in instance
+ * frames (which have a `this` to probe) and static frames; and for an enum
+ * value's constructor parameters by position.
  */
 @DisplayName("HashLink debugger: evaluate expression (integration)")
 public class EvaluateExpressionIntegrationTest extends DapIntegrationTestBase {
@@ -32,7 +32,7 @@ public class EvaluateExpressionIntegrationTest extends DapIntegrationTestBase {
     assertEquals("12", evaluated(frameId, "x + Point.axes"), "mixed with an instance field");
   }
 
-  /** The packaged shape the user hits: a dotted class path as the root. */
+  /** The packaged shape: a dotted class path as the root. */
   @Test
   @DisplayName("package qualified statics combine inside an instance frame")
   public void packageQualifiedStaticsCombineInsideAnInstanceFrame() throws Exception {
@@ -58,7 +58,7 @@ public class EvaluateExpressionIntegrationTest extends DapIntegrationTestBase {
     assertEquals("Array(1)", evaluated(frameId, "f.captured"), "a bound closure's environment by its child name");
   }
 
-  /** A static frame has no `this`, so these always worked — keep them working. */
+  /** A static frame has no `this` to probe; statics combine there too. */
   @Test
   @DisplayName("static frames keep combining statics")
   public void staticFramesKeepCombiningStatics() throws Exception {

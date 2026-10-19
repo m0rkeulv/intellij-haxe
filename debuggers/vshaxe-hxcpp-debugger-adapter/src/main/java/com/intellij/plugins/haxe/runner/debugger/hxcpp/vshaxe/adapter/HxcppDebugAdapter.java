@@ -628,9 +628,7 @@ public class HxcppDebugAdapter implements Closeable {
   /**
    * The index of a top-level assignment {@code =} in the expression, or -1.
    * Top-level means outside quotes and brackets; {@code ==}, {@code !=},
-   * {@code <=} and {@code >=} are comparisons, not assignments. Public so
-   * the IDE-side evaluator can recognize assignments too (it refreshes the
-   * variable views after one succeeds).
+   * {@code <=} and {@code >=} are comparisons, not assignments.
    */
   public static int topLevelAssignment(String expression) {
     int depth = 0;

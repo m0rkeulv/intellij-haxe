@@ -185,7 +185,8 @@ final class HaxeTestLaunchPlanner {
       return limePlan(project, file, type, debugLaunch);
     }
     if (singleRun != null && type != HaxeBuildFileType.HXML) {
-      // TODO gutter runs for nmml tests builds: nme's app-main override is unverified
+      // TODO: single runs (gutter, context menu) for nmml tests builds: nme's app-main override
+      //  is unverified; HaxeTestContext offers none for them either
       throw new ExecutionException(HaxeBundle.message("haxe.test.single.unsupported.type", file.getName()));
     }
     if (type == HaxeBuildFileType.NMML) {

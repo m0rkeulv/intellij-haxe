@@ -265,7 +265,7 @@ public final class HaxeCompilerInlayService implements Disposable {
     }
   }
 
-  /** A saved, created, deleted or externally changed Haxe source: a compile reads it differently now. */
+  /** The declaration's name text, or null when it has none. */
   @Nullable
   private static String nameOf(@NotNull PsiElement declaration) {
     HaxeComponentName name = HaxeTypeHintAnchors.componentNameOf(declaration);

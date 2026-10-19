@@ -471,7 +471,7 @@ public final class HaxeToolWindowNodes {
   }
 
   /**
-   * Compilation server row: shows the project server's state for this container.
+   * Compilation server row: shows the state of the server serving this container's SDK.
    * Clicking toggles the container's participation, or opens Build Tools settings
    * while the server is disabled project-wide. {@code contextFailure} carries the
    * container's last failed compiler request (a build context that does not

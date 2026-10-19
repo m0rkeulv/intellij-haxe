@@ -321,7 +321,8 @@ public final class HaxeResolveContexts implements Disposable {
   }
 
   /** The hxml's {@code -main} class as a path suffix under a source directory; null without one. */
-  // TODO: the lime family's <app main="..."/> is not read yet, so two project.xml sharing a source folder tie on the active file
+  // TODO: a Lime-family suffix from <app main="..."/> (HaxeMainClasses.mainTypePath reads it);
+  //  two project.xml sharing a source folder tie on the active file until then
   @Nullable
   private String mainFileSuffix(@NotNull HaxeBuildFile buildFile) {
     if (buildFile.type() != HaxeBuildFileType.HXML) return null;

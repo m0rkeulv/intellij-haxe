@@ -68,9 +68,9 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Content panel of the Haxe tool window: a toolbar (sync, purge caches, execute
- * command, settings) above a tree of modules, their build files and each file's
- * target, defines and library dependencies.
+ * Content panel of the Haxe tool window: a toolbar above the container tree
+ * (the project root and the modules, with their build files, settings and
+ * tools).
  */
 @CustomLog
 public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements Disposable {
@@ -246,7 +246,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
     });
   }
 
-  /** The hide-empty-modules toggle removes module rows with no build files and no user configuration. */
+  /** The hide-empty-modules toggle removes module rows with no build files, no tools and no user configuration. */
   @NotNull
   private List<ContainerEntry> visibleContainers(@NotNull List<ContainerEntry> scan) {
     if (!HaxeToolWindowUiState.getInstance(project).isHiding(EmptyRows.MODULES)) return scan;

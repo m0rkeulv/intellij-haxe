@@ -25,7 +25,7 @@ import org.jetbrains.annotations.TestOnly;
 @State(name = "HaxeEnvironments", storages = @Storage("haxeBuildConfig.xml"))
 public final class HaxeEnvironmentStore implements PersistentStateComponent<HaxeEnvironmentStore.State> {
 
-  /** The layout {@link #getState} writes. Version 1 moved define entries and the custom target to the build files. */
+  /** The layout version {@link #getState} stamps; define entries and the custom target live per build file. */
   static final int STATE_VERSION = 1;
 
   public static final class State {

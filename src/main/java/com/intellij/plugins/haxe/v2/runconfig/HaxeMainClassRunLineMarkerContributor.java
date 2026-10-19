@@ -26,13 +26,13 @@ import java.util.List;
 /**
  * Run and Debug gutter marks on the class a build starts from: on its
  * {@code static function main()}, else on the class name (a Lime main class
- * has no main; Lime's generated {@code ApplicationMain} constructs it). One
- * popup entry per build file and launch kind ({@link HaxeMainClassLaunches}),
- * each starting that build's Build &amp; run configuration, whose
+ * has no main; Lime's generated {@code ApplicationMain} constructs it). A Run
+ * entry per build file and launch kind ({@link HaxeMainClassLaunches}), plus
+ * a Debug entry where the target has a debug lane, each starting that build's
+ * Build &amp; run configuration, whose
  * before-launch step compiles the build.
  */
 public final class HaxeMainClassRunLineMarkerContributor extends RunLineMarkerContributor {
-  // TODO: no Profile entries yet; the tool window's Build & run row offers them through the profiler executors
 
   private static final String MAIN_METHOD_NAME = "main";
 
@@ -79,6 +79,7 @@ public final class HaxeMainClassRunLineMarkerContributor extends RunLineMarkerCo
         actions.add(new LaunchAction(launch, true));
       }
     }
+    // TODO: no Profile entries yet; the tool window's Build & run row offers them through the profiler executors
     AnAction[] actionArray = actions.toArray(AnAction.EMPTY_ARRAY);
     String tooltip = HaxeBundle.message("haxe.main.gutter.tooltip", mainClass.getName());
     return new Info(AllIcons.RunConfigurations.TestState.Run, actionArray, ignored -> tooltip);

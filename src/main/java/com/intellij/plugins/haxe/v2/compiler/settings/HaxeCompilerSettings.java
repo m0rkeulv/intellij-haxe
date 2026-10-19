@@ -105,8 +105,8 @@ public interface HaxeCompilerSettings {
   }
 
   /**
-   * Whether conditional compilation (`#if haxe_ver` and friends) evaluates
-   * against the module's LANGUAGE LEVEL rather than the container's actual
+   * Whether conditional compilation ({@code #if haxe_ver} and friends)
+   * evaluates against the container's LANGUAGE LEVEL rather than its actual
    * compiler version.
    */
   boolean isUseLanguageLevelForConditionals();

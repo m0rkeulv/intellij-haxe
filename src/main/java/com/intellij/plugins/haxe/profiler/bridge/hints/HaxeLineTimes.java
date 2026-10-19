@@ -28,7 +28,7 @@ import java.util.Set;
 
 /**
  * A capture's time aggregated per source line, for the editor gutter
- * hints. Every capture kind attributes per FUNCTION today, one line per
+ * hints. Every capture kind attributes per FUNCTION, one line per
  * function: tracy zones carry only the callee's declaration line (the
  * caller's current line never reaches the wire); the HL translator merges
  * a function's sampled lines onto its earliest one; V8 positions are

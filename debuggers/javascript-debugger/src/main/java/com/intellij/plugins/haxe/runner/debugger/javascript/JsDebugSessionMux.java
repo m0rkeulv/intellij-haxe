@@ -186,8 +186,8 @@ public final class JsDebugSessionMux implements DapEndpoint {
       }
       case ContinueRequest resume -> {
         // routed to the owning session ONLY: another session paused at its own
-        // breakpoint stays paused - the IDE holds its stop back and presents
-        // it after this resume (DapDebugProcess.pendingStops)
+        // breakpoint stays paused; the IDE's Resume releases every thread
+        // (see DapDebugProcess.pauseOnScreen)
         return routeByThread(resume, resume.getArguments() != null ? resume.getArguments().getThreadId() : null,
                              raw -> resume.getArguments().setThreadId(raw), timeoutMillis);
       }

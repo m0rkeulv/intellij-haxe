@@ -38,11 +38,8 @@ public final class HaxeTestFrameworks {
 
   /**
    * Like {@link #forBuildFile}, but null when the build declares NO known
-   * framework. The offer surfaces (tests rows, marking, gutter candidates)
-   * gate on this, so a plain application build never presents a test run;
-   * actual runs keep the utest default for configurations that predate the
-   * gate. A framework reachable only TRANSITIVELY (a custom lib depending on
-   * utest) is not seen - the tests build declares its framework directly.
+   * framework. A framework reachable only TRANSITIVELY (a custom lib depending
+   * on utest) is not seen - the tests build declares its framework directly.
    * Call inside a read action.
    */
   @Nullable
@@ -52,7 +49,13 @@ public final class HaxeTestFrameworks {
     return detectedFramework(HaxeBuildSections.inspectSelected(project, buildFile).libraries());
   }
 
-  /** The framework the library list declares, or null when none of the known frameworks is among them. */
+  /**
+   * The framework the library list declares, or null when none of the known
+   * frameworks is among them. The offer surfaces (tests rows, marking, gutter
+   * candidates) gate on this, so a plain application build never presents a
+   * test run; actual runs ({@link #forBuildFile}) keep the utest default for
+   * configurations that predate the gate.
+   */
   @Nullable
   public static HaxeTestFramework detectedFramework(@NotNull List<HaxeBuildFileInfo.HaxeLibDependency> libraries) {
     for (HaxeTestFramework framework : ALL) {

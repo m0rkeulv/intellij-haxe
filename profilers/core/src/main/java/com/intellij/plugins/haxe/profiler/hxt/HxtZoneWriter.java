@@ -37,7 +37,8 @@ import java.util.TreeMap;
  *            i32 line, i32 color) — appended to the accumulating table,
  *            always before the first chunk that references the entries
  * ZONES (2): i32 count, i64 minStartNs, i64 maxEndNs, i64 maxDurationNs,
- *            then one raw DEFLATE stream (JDK zlib, level 6; one
+ *            then one raw DEFLATE stream (JDK zlib at the level INFO
+ *            records; one
  *            independent stream per chunk so random access survives) of
  *            count * (i32 threadId, u16 depth, i64 startDeltaNs,
  *            i64 durationNs, i32 srclocIndex) — CLOSE order (per thread a
@@ -88,13 +89,13 @@ public final class HxtZoneWriter implements TracyEventReader.ZoneSink {
   static final int ZONE_BYTES = 4 + 2 + 8 + 8 + 4;
   private static final String TARGET = "hxcpp-tracy";
   private static final int CHUNK_ZONES = 65_536;
-  /** The archive level a finished file settles at (zlib's knee on our data). */
+  /** The default archive level a finished file is recompressed to; the user setting picks the actual one. */
   public static final int FINAL_LEVEL = 6;
   /**
    * The level a LIVE capture writes at: the profiled app runs concurrently
    * with this thread, so minimal CPU beats ratio while it is alive —
-   * {@link HxtZoneRecompressor} brings the file to {@link #FINAL_LEVEL}
-   * after the app has exited. Readers never care: inflate is
+   * {@link HxtZoneRecompressor} brings the file to the archive level
+   * (default {@link #FINAL_LEVEL}) after the app has exited. Readers never care: inflate is
    * level-agnostic.
    */
   public static final int LIVE_LEVEL = 1;

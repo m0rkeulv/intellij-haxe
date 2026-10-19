@@ -61,7 +61,7 @@ public final class HaxeDebugAdditions {
   private HaxeDebugAdditions() {
   }
 
-  /** Extra haxe compiler arguments for a debuggable build, or null when the target has no debugger support yet. */
+  /** Extra haxe compiler arguments for a debuggable build, or null when there is nothing to add. */
   @Nullable
   public static List<String> forTarget(@NotNull HaxeTarget target, @NotNull Debugger debugger) {
     return switch (target) {
@@ -69,7 +69,8 @@ public final class HaxeDebugAdditions {
       case HL, JAVA_SCRIPT -> List.of("-debug");
       case FLASH -> flashAdditions(debugger);
       case CPP -> cppAdditions(debugger);
-      // TODO: eval (INTERP) has no debug additions yet
+      // TODO: whether the before-run compile of an eval (INTERP) Debug launch adds -debug
+      //  (InterpDapBackend supplies -D eval-debugger per session)
       default -> null;
     };
   }

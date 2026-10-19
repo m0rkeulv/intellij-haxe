@@ -206,7 +206,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
 
     assertEquals("buddy", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
-    // buddy's generated main exits 1 on a failing spec - verified live
+    // buddy's generated main exits 1 on a failing spec
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
 
     assertTrue(recorder.startedSuites.contains("A calculator"),
@@ -245,7 +245,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
 
     assertEquals("tink_unittest", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
     Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
-    // Runner.exit reports the failure count as the exit code - verified live
+    // Runner.exit reports the failure count as the exit code
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
 
     assertTrue(recorder.startedSuites.contains("TinkCase"), "case suite expected, got: " + recorder.startedSuites);

@@ -13,9 +13,6 @@ import java.net.Socket;
  * A jsonrpc session over one TCP socket: sends whole {@link JsonRpcRequest}s
  * and receives whole {@link JsonRpcServerMessage}s. Does not assign ids or
  * match responses to requests — that is {@link JsonRpcClient}'s job.
- *
- * In the normal launch flow the debuggee is the connecting side, so the socket
- * usually comes from a ServerSocket accept rather than {@link #connect}.
  */
 public class JsonRpcConnection implements Closeable {
   private final Socket socket;

@@ -30,7 +30,8 @@ public record MissingFields(String typeName, String moduleFile, List<Entry> entr
 
   /**
    * One missing class field, as the compiler typed it. {@code fieldKind} is
-   * FMethod, FVar or FProp. A variable's {@code readAccess} and
+   * FMethod or FVar (a property is an FVar with accessor access). A
+   * variable's {@code readAccess} and
    * {@code writeAccess} hold the wire access kinds (AccNormal, AccCall,
    * AccNever, AccNo, ...). {@code declarationOffset} is the start offset of
    * the declaration in its own file, or -1 when unknown.
