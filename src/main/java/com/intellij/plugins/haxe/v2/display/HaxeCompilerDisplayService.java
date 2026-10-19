@@ -192,9 +192,25 @@ public final class HaxeCompilerDisplayService implements Disposable {
    */
   @Nullable
   public InitializeResult.SemVer connectedHaxeVersion(@Nullable String sdkName) {
-    int endpointId = runningEndpointIdFor(sdkName);
-    Capability known = endpointId > 0 ? capabilities.get(endpointId) : null;
+    Capability known = knownCapabilityOf(sdkName);
     return known != null ? known.haxeVersion() : null;
+  }
+
+  /**
+   * Whether the server serving the SDK is known to lack the method: it runs
+   * and its initialize answer did not list it. False while that is unknown;
+   * starts nothing, so it may run under the read lock.
+   */
+  boolean lacksMethod(@Nullable String sdkName, @NotNull String method) {
+    Capability known = knownCapabilityOf(sdkName);
+    return known != null && !known.methods().contains(method);
+  }
+
+  /** What the running server of the SDK answered on initialize; null while none runs or it has not answered. */
+  @Nullable
+  private Capability knownCapabilityOf(@Nullable String sdkName) {
+    int endpointId = runningEndpointIdFor(sdkName);
+    return endpointId > 0 ? capabilities.get(endpointId) : null;
   }
 
   /**
