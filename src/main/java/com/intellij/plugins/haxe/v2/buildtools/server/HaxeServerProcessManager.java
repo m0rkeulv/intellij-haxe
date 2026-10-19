@@ -3,10 +3,12 @@ package com.intellij.plugins.haxe.v2.buildtools.server;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.process.OSProcessHandler;
+import com.intellij.execution.process.ProcessOutputType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
+import com.intellij.plugins.haxe.HaxeBundle;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeProjectTrust;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolEnvironment;
 import com.intellij.plugins.haxe.v2.buildtools.HaxeToolPathResolver;
@@ -43,6 +45,24 @@ abstract class HaxeServerProcessManager<P extends HaxeServerProcess> implements 
 
   HaxeServerProcessManager(@NotNull Project project) {
     this.project = project;
+    project.getMessageBus().connect(this).subscribe(HaxeServerMetricsListener.TOPIC, new HaxeServerMetricsListener() {
+      @Override
+      public void metricsChanged() {
+      }
+
+      @Override
+      public void requestFailed(@NotNull String serverId, @NotNull String method, long millis, @NotNull String reason) {
+        printFailedRequest(serverId, method, millis, reason);
+      }
+    });
+  }
+
+  /** A failed request shows in its process's console, next to the server's own output, with its reason. */
+  private synchronized void printFailedRequest(@NotNull String id, @NotNull String method, long millis, @NotNull String reason) {
+    P process = processes.get(id);
+    if (process == null) return;
+    String line = HaxeBundle.message("haxe.server.console.request.failed", method, String.valueOf(millis), reason);
+    process.output.broadcast(line + "\n", ProcessOutputType.STDERR);
   }
 
   /**

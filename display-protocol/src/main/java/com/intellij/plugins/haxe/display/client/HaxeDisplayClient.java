@@ -28,7 +28,8 @@ public interface HaxeDisplayClient {
     default void beforeRequest(String method) {
     }
 
-    void afterRequest(String method, long millis, boolean success);
+    /** The request was answered or gave up; {@code failure} is null for a success, else why it failed. */
+    void afterRequest(String method, long millis, DisplayRequestException failure);
   }
 
   /** The method name a plain compiler run ({@link #exchange}) reports to the observer, which has no display method. */

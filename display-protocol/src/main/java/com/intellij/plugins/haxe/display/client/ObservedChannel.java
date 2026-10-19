@@ -38,15 +38,22 @@ public final class ObservedChannel {
       observer.beforeRequest(method);
     }
     long start = System.nanoTime();
-    boolean success = false;
+    DisplayRequestException failure = null;
     try {
-      T result = exchange.send();
-      success = true;
-      return result;
+      return exchange.send();
+    }
+    catch (DisplayRequestException e) {
+      failure = e;
+      throw e;
+    }
+    catch (RuntimeException | Error e) {
+      // an answer the decoder could not read is a failed request as well
+      failure = new DisplayRequestException(e.toString(), e);
+      throw e;
     }
     finally {
       if (observer != null) {
-        observer.afterRequest(method, (System.nanoTime() - start) / 1_000_000, success);
+        observer.afterRequest(method, (System.nanoTime() - start) / 1_000_000, failure);
       }
     }
   }
