@@ -36,12 +36,12 @@ public record Diagnostic(DiagnosticKind kind,
 
   /** The message of a COMPILER_ERROR, PARSER_ERROR or DEPRECATION_WARNING. */
   public String messageArg() {
-    return args instanceof DiagnosticArgs.Message message ? message.text() : "";
+    return args instanceof DiagnosticArgs.Message(String text) ? text : "";
   }
 
   /** The suggestions of an UNRESOLVED_IDENTIFIER. */
   public List<IdentifierSuggestion> suggestionArgs() {
-    return args instanceof DiagnosticArgs.Suggestions suggestions ? suggestions.suggestions() : List.of();
+    return args instanceof DiagnosticArgs.Suggestions(List<IdentifierSuggestion> suggestions1) ? suggestions1 : List.of();
   }
 
   /** The missing fields of a MISSING_FIELDS entry; null for any other kind. */

@@ -30,7 +30,7 @@ final class Haxe3SourceText {
   }
 
   static Haxe3SourceText read(Path file) throws IOException {
-    return new Haxe3SourceText(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+    return new Haxe3SourceText(Files.readString(file));
   }
 
   String text() {

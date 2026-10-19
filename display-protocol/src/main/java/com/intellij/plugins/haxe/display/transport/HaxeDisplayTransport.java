@@ -98,7 +98,7 @@ public final class HaxeDisplayTransport {
       } else if (line.charAt(0) == 0x02) {
         hasError = true;
       } else {
-        if (payload.length() > 0) payload.append('\n');
+        if (!payload.isEmpty()) payload.append('\n');
         payload.append(line);
       }
     }
