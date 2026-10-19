@@ -10,6 +10,7 @@ import com.intellij.plugins.haxe.lang.psi.HaxeNamedComponent;
 import com.intellij.plugins.haxe.util.HaxeReadActions;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerAssignment;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeDisplayConnectionMode;
@@ -139,7 +140,7 @@ public class HaxeLiveHaxe3IntegrationTest extends HaxeCodeInsightFixtureTestCase
     Connected completion = onPooledThread(() -> displayService().connectFor(context, DisplayMethods.COMPLETION));
 
     assertNotNull(completion, "a haxe 3 server answers completion");
-    boolean dedicated = HaxeDisplayProcessManager.getInstance(getProject()).runningIdFor(null) > 0;
+    boolean dedicated = HaxeDisplayProcessManager.getInstance(getProject()).runningIdFor(sharedServer()) > 0;
     assertTrue(dedicated, "the requests run on a dedicated display process over stdio");
   }
 
@@ -198,7 +199,7 @@ public class HaxeLiveHaxe3IntegrationTest extends HaxeCodeInsightFixtureTestCase
     Connected completion = onPooledThread(() -> displayService().connectFor(context, DisplayMethods.COMPLETION));
 
     assertNotNull(completion, "the build server, started with --wait, answers completion");
-    boolean buildServerRuns = HaxeCompilationServerManager.getInstance(getProject()).runningPortForSdk(null) > 0;
+    boolean buildServerRuns = HaxeCompilationServerManager.getInstance(getProject()).runningPort(sharedServer().id()) > 0;
     assertTrue(buildServerRuns, "the requests went to the build server");
   }
 
@@ -210,6 +211,11 @@ public class HaxeLiveHaxe3IntegrationTest extends HaxeCodeInsightFixtureTestCase
 
     assertNotNull(sdkData, "the folder of the haxe on the PATH is an SDK home");
     assertEquals(haxeVersionOnPath(), sdkData.getVersion());
+  }
+
+  /** The project default SDK's shared server instance. */
+  private HaxeServerAssignment sharedServer() {
+    return HaxeServerAssignment.shared(getProject(), null);
   }
 
   private HaxeCompilerDisplayService displayService() {

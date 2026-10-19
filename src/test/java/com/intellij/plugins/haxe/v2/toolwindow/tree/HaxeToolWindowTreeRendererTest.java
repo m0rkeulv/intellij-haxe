@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.toolwindow.tree;
 
 import com.intellij.plugins.haxe.HaxeLightFixtureTestCase;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerSharing;
 import com.intellij.plugins.haxe.v2.toolwindow.tree.HaxeToolWindowNodes.*;
 import com.intellij.ui.treeStructure.Tree;
 import java.util.Arrays;
@@ -28,6 +29,14 @@ public class HaxeToolWindowTreeRendererTest extends HaxeLightFixtureTestCase {
     List<Object> tags = fragmentTags(new EnvLanguageLevelNode("container", "Haxe 4.3"));
 
     // label, gap, value, dropdown marker
+    assertEquals(Arrays.asList(null, null, RowValueLink.INSTANCE, RowValueLink.INSTANCE), tags);
+  }
+
+  @Test
+  @DisplayName("server instance value answers a click")
+  public void testServerInstanceValueAnswersAClick() {
+    List<Object> tags = fragmentTags(new ServerInstanceNode("container", HaxeServerSharing.SHARED));
+
     assertEquals(Arrays.asList(null, null, RowValueLink.INSTANCE, RowValueLink.INSTANCE), tags);
   }
 

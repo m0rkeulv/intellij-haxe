@@ -589,6 +589,7 @@ public final class HaxeToolWindowPanel extends SimpleToolWindowPanel implements 
       case SectionNode sectionNode -> HaxeToolWindowEditors.showSectionPopup(project, sectionNode, point);
       case EnvSdkNode sdkNode -> HaxeToolWindowEditors.showEnvironmentSdkPopup(project, sdkNode, point);
       case EnvLanguageLevelNode levelNode -> HaxeToolWindowEditors.showLanguageLevelPopup(project, levelNode, point);
+      case ServerInstanceNode serverInstance -> HaxeToolWindowEditors.showServerInstancePopup(project, serverInstance, point);
       case ConnectionModeNode connectionMode -> HaxeToolWindowEditors.showConnectionModePopup(project, connectionMode, point);
       case IdeCustomTargetNode customTargetNode -> HaxeToolWindowEditors.editCustomTarget(project, customTargetNode);
       case EnvCompileCommandNode compileCommand -> HaxeToolWindowEditors.configureCompileCommand(project, compileCommand);

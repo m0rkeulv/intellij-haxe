@@ -27,6 +27,7 @@ import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildSettingsListene
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerListener;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerAssignment;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetricsListener;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerProcesses;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerProcesses.ServerInfo;
@@ -326,7 +327,7 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
       }
       // process creation must stay off the EDT
       AppExecutorUtil.getAppExecutorService()
-        .execute(() -> HaxeCompilationServerManager.getInstance(project).ensureRunning(null));
+        .execute(() -> HaxeCompilationServerManager.getInstance(project).ensureRunning(HaxeServerAssignment.shared(project, null)));
     }
 
     @Override

@@ -6,8 +6,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFile;
 import com.intellij.plugins.haxe.v2.buildsystem.HaxeBuildFileType;
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerAssignment;
 import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeBuildToolSettings;
-import com.intellij.plugins.haxe.v2.buildtools.settings.HaxeEnvironmentStore;
 import com.intellij.util.execution.ParametersListUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -70,8 +70,8 @@ public final class HaxeCustomCommands {
     if (!wantsPort) return command;
     if (!HaxeBuildToolSettings.getInstance(project).isCompilationServerEnabled()) return command;
 
-    String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(environmentSdk);
+    HaxeServerAssignment assignment = HaxeServerAssignment.forContainer(project, containerId);
+    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(assignment);
     if (port <= 0) return command;
     return command.stream()
       .map(argument -> argument.replace(SERVER_PORT_VARIABLE, String.valueOf(port)))

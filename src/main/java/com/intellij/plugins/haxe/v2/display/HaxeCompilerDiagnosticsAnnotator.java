@@ -149,7 +149,7 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(file.getProject());
     VirtualFile virtualFile = file.getOriginalFile().getVirtualFile();
     var context = virtualFile == null ? null : displayService.contextFor(virtualFile);
-    return context == null ? null : displayService.connectedHaxeVersion(context.sdkName());
+    return context == null ? null : displayService.connectedHaxeVersion(context);
   }
 
 }

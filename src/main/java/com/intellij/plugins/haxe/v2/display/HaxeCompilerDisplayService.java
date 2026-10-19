@@ -2,15 +2,11 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeDefineContextService;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeLimeProjectInfoService;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerMetrics;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeDisplayProcessManager;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerGenerations;
+import com.intellij.plugins.haxe.v2.buildtools.server.*;
 import com.intellij.plugins.haxe.v2.buildtools.settings.*;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.compiler.settings.HaxeServerGeneration;
 import com.intellij.plugins.haxe.v2.buildtools.info.HaxeNmeProjectInfoService;
-import com.intellij.plugins.haxe.v2.buildtools.server.HaxeContextFailures;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Document;
@@ -42,7 +38,6 @@ import com.intellij.plugins.haxe.v2.buildtools.context.HaxeResolveContexts;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevel;
 import com.intellij.plugins.haxe.v2.compiler.HaxeLanguageLevelUtil;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiModificationTracker;
 import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.PsiErrorElementUtil;
@@ -171,45 +166,47 @@ public final class HaxeCompilerDisplayService implements Disposable {
   }
 
   /**
-   * The key of the per-server state for the SDK's server (see
+   * The key of the per-server state for the context's server (see
    * {@link Connected#port()}): the id of its running display process in
-   * dedicated mode, else the shared server's port; -1 while nothing runs.
-   * Starts nothing, so it may run under the read lock.
+   * dedicated mode, else the compilation server's port; -1 while nothing
+   * runs. Starts nothing, so it may run under the read lock.
    */
-  int runningEndpointIdFor(@Nullable String sdkName) {
-    HaxeServerGeneration generation = HaxeServerGenerations.known(project, sdkName);
+  int runningEndpointIdFor(@NotNull DisplayContext context) {
+    HaxeServerGeneration generation = HaxeServerGenerations.known(project, context.sdkName());
+    HaxeServerAssignment assignment = HaxeServerAssignment.forContainer(project, context.containerId());
     if (HaxeCompilerSettings.getInstance(project).usesDedicatedDisplayProcess(generation)) {
-      int id = HaxeDisplayProcessManager.getInstance(project).runningIdFor(sdkName);
+      int id = HaxeDisplayProcessManager.getInstance(project).runningIdFor(assignment);
       if (id > 0) return id;
     }
-    return HaxeCompilationServerManager.getInstance(project).runningPortForSdk(sdkName);
+    return HaxeCompilationServerManager.getInstance(project).runningPort(assignment.id());
   }
 
   /**
-   * The haxe version of the server serving the given SDK; null while that
-   * server does not run or has not answered an initialize yet. Each SDK has
-   * its own server, so a mixed-version project asks per context.
+   * The haxe version of the server serving the context; null while that
+   * server does not run or has not answered an initialize yet. Each SDK, and
+   * each container with a server of its own, has its own server, so a
+   * mixed-version project asks per context.
    */
   @Nullable
-  public InitializeResult.SemVer connectedHaxeVersion(@Nullable String sdkName) {
-    Capability known = knownCapabilityOf(sdkName);
+  public InitializeResult.SemVer connectedHaxeVersion(@NotNull DisplayContext context) {
+    Capability known = knownCapabilityOf(context);
     return known != null ? known.haxeVersion() : null;
   }
 
   /**
-   * Whether the server serving the SDK is known to lack the method: it runs
-   * and its initialize answer did not list it. False while that is unknown;
-   * starts nothing, so it may run under the read lock.
+   * Whether the server serving the context is known to lack the method: it
+   * runs and its initialize answer did not list it. False while that is
+   * unknown; starts nothing, so it may run under the read lock.
    */
-  boolean lacksMethod(@Nullable String sdkName, @NotNull String method) {
-    Capability known = knownCapabilityOf(sdkName);
+  boolean lacksMethod(@NotNull DisplayContext context, @NotNull String method) {
+    Capability known = knownCapabilityOf(context);
     return known != null && !known.methods().contains(method);
   }
 
-  /** What the running server of the SDK answered on initialize; null while none runs or it has not answered. */
+  /** What the context's running server answered on initialize; null while none runs or it has not answered. */
   @Nullable
-  private Capability knownCapabilityOf(@Nullable String sdkName) {
-    int endpointId = runningEndpointIdFor(sdkName);
+  private Capability knownCapabilityOf(@NotNull DisplayContext context) {
+    int endpointId = runningEndpointIdFor(context);
     return endpointId > 0 ? capabilities.get(endpointId) : null;
   }
 
@@ -470,7 +467,7 @@ public final class HaxeCompilerDisplayService implements Disposable {
     if (!mayUseServer()) return null;
     List<String> args = resolveArgs(context);
     if (args == null) return null;
-    Endpoint endpoint = endpointFor(context.sdkName());
+    Endpoint endpoint = endpointFor(context);
     if (endpoint == null) return null;
 
     Capability known = capabilities.get(endpoint.id());
@@ -538,25 +535,25 @@ public final class HaxeCompilerDisplayService implements Disposable {
   }
 
   /**
-   * The SDK's dedicated display process when the setting asks for one and
-   * it runs, else the shared {@code --wait} server. A dedicated process that
-   * fails to start falls back to the shared server, so the feature stays
-   * available.
+   * The context's server instance ({@link HaxeServerAssignment}): its
+   * dedicated display process when the setting asks for one and it runs,
+   * else the compilation server. A display process that fails to start
+   * falls back to the compilation server, so the feature stays available.
    */
   @Nullable
-  private Endpoint endpointFor(@Nullable String sdkName) {
-    String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
-    HaxeServerGeneration generation = HaxeServerGenerations.of(project, sdkName);
+  private Endpoint endpointFor(@NotNull DisplayContext context) {
+    HaxeServerAssignment assignment = HaxeServerAssignment.forContainer(project, context.containerId());
+    HaxeServerGeneration generation = HaxeServerGenerations.of(project, context.sdkName());
     if (HaxeCompilerSettings.getInstance(project).usesDedicatedDisplayProcess(generation)) {
-      HaxeDisplayProcessManager.Channel channel = HaxeDisplayProcessManager.getInstance(project).channelFor(sdkName);
+      HaxeDisplayProcessManager.Channel channel = HaxeDisplayProcessManager.getInstance(project).channelFor(assignment);
       if (channel != null) {
-        return new Endpoint(channel.channel(), channel.id(), HaxeDisplayProcessManager.idFor(executablePath));
+        return new Endpoint(channel.channel(), channel.id(), HaxeDisplayProcessManager.idFor(assignment));
       }
     }
-    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(sdkName);
+    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(assignment);
     if (port <= 0) return null;
     DisplayChannel socket = HaxeDisplayTransport.socketPerRequest(HaxeCompilationServerManager.SERVER_HOST, port);
-    return new Endpoint(socket, port, executablePath);
+    return new Endpoint(socket, port, assignment.id());
   }
 
   /**

@@ -25,10 +25,10 @@ import java.nio.file.Path;
  * Runs the project's haxe compilation servers ({@code haxe --server-listen <port>}, {@code --wait} on haxe 3).
  * A server's cache belongs to one haxe BINARY, and a project whose modules
  * use different SDKs can need several haxe versions at once. The manager
- * therefore runs one server process per resolved haxe executable and keys
- * the entry by that path. The first compile that connects through an SDK
- * starts its server. The process mechanics live in
- * {@link HaxeServerProcessManager}.
+ * therefore runs one server process per {@link HaxeServerAssignment}: the
+ * resolved haxe executable, plus the container for one that runs a server
+ * of its own. The first compile that connects through an assignment starts
+ * its server. The process mechanics live in {@link HaxeServerProcessManager}.
  */
 @Service(Service.Level.PROJECT)
 @CustomLog
@@ -46,39 +46,32 @@ public final class HaxeCompilationServerManager extends HaxeServerProcessManager
     return project.getService(HaxeCompilationServerManager.class);
   }
 
-  /** The id of the server instance serving the container: its effective SDK's haxe executable. */
+  /** The id of the server instance serving the container; see {@link HaxeServerAssignment#forContainer}. */
   @NotNull
   public static String serverIdFor(@NotNull Project project, @NotNull String containerId) {
-    String sdkName = HaxeToolPathResolver.effectiveSdkName(project, containerId);
-    return HaxeToolPathResolver.resolveHaxeExecutable(project, sdkName);
+    return HaxeServerAssignment.forContainer(project, containerId).id();
   }
 
   /**
-   * Starts the server for the haxe binary the given SDK resolves to, unless
-   * it already runs, and returns its port. Returns -1 when the server is
-   * disabled or failed to start; callers then compile without --connect.
-   * Process creation must stay off the EDT.
+   * Starts the assigned server instance unless it already runs, and returns
+   * its port. Returns -1 when the server is disabled or failed to start;
+   * callers then compile without --connect. Process creation must stay off
+   * the EDT.
    */
-  public synchronized int ensureRunning(@Nullable String preferredSdkName) {
+  public synchronized int ensureRunning(@NotNull HaxeServerAssignment assignment) {
     if (!mayStart()) {
       return -1;
     }
-    String executablePath = HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName);
-    HaxeServerProcess process = processes.get(executablePath);
+    HaxeServerProcess process = processes.get(assignment.id());
     if (process == null) {
-      String displayName = displayNameFor(project, preferredSdkName, executablePath);
-      process = new HaxeServerProcess(executablePath, executablePath, preferredSdkName, displayName);
-      processes.put(executablePath, process);
+      process = new HaxeServerProcess(assignment.id(), assignment.executablePath(), assignment.sdkName(),
+                                      assignment.displayName());
+      processes.put(assignment.id(), process);
     }
     if (process.isAlive()) {
       return process.port;
     }
     return startLocked(process);
-  }
-
-  /** The running server's port for the given SDK's binary, or -1. */
-  public synchronized int runningPortForSdk(@Nullable String preferredSdkName) {
-    return runningPort(HaxeToolPathResolver.resolveHaxeExecutable(project, preferredSdkName));
   }
 
   public synchronized boolean isAnyRunning() {

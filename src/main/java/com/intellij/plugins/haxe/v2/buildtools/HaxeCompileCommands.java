@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.v2.buildtools;
 
 import com.intellij.plugins.haxe.v2.buildtools.server.HaxeCompilationServerManager;
+import com.intellij.plugins.haxe.v2.buildtools.server.HaxeServerAssignment;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.HaxeBundle;
@@ -250,7 +251,8 @@ public final class HaxeCompileCommands {
     if (!useServer) return command;
 
     String environmentSdk = HaxeEnvironmentStore.getInstance(project).getSdkName(containerId);
-    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(environmentSdk);
+    HaxeServerAssignment assignment = HaxeServerAssignment.forContainer(project, containerId);
+    int port = HaxeCompilationServerManager.getInstance(project).ensureRunning(assignment);
     if (port <= 0) return command;
 
     List<String> connected = new ArrayList<>(command);
