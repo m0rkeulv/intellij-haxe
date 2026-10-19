@@ -1,6 +1,7 @@
 package com.intellij.plugins.haxe.runner.debugger.dap.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import com.intellij.plugins.haxe.runner.debugger.dap.protocol.events.StoppedEvent;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +42,20 @@ public class EvaluateExpressionIntegrationTest extends DapIntegrationTestBase {
     assertEquals("100", evaluated(frameId, "pkg.Deep.marker + 1"), "dotted class path + literal");
     assertEquals("141", evaluated(frameId, "pkg.Deep.marker + pkg.Deep.CONSTANT"), "two dotted class paths");
     assertEquals("141", evaluated(frameId, "marker + CONSTANT"), "unqualified statics");
+  }
+
+  /** The variables view names an enum value's parameters by index; the Evaluate dialog pre-fills that index. */
+  @Test
+  @DisplayName("enum constructor parameters index by position")
+  public void enumConstructorParametersIndexByPosition() throws Exception {
+    StoppedEvent stopped = runToBreakpoint(FIXTURE_RICH, FIXTURE_RICH_LINE);
+    int frameId = topFrameId(stopped.getBody().getThreadId());
+
+    assertEquals("2", evaluated(frameId, "shade[0]"), "first parameter of Tinted(2, \"red\")");
+    assertEquals("\"red\"", evaluated(frameId, "shade[1]"), "second parameter");
+    assertEquals("3", evaluated(frameId, "shade[0] + 1"), "a parameter inside an operator expression");
+    assertFalse(evaluateRaw(frameId, "shade[2]").isSuccess(), "no third parameter");
+    assertEquals("Array(1)", evaluated(frameId, "f.captured"), "a bound closure's environment by its child name");
   }
 
   /** A static frame has no `this`, so these always worked — keep them working. */
