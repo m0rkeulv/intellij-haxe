@@ -13,6 +13,7 @@ import com.intellij.ui.table.TableView;
 import com.intellij.util.ui.ColumnInfo;
 import com.intellij.util.ui.ListTableModel;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
@@ -262,11 +263,13 @@ public final class HaxeCompilerSettingsPanel {
   }
 
   /** Whether the completion source combo takes input: only while completion is a compiler feature. */
+  @TestOnly
   boolean isCompletionModeChoiceEnabled() {
     return completionModeCombo.isEnabled();
   }
 
   /** Whether the generated-member preview toggle takes input: only while navigation is a compiler feature. */
+  @TestOnly
   boolean isGeneratedMemberPreviewChoiceEnabled() {
     return featureGeneratedMemberPreviewCheckBox.isEnabled();
   }
@@ -308,6 +311,7 @@ public final class HaxeCompilerSettingsPanel {
   }
 
   /** The level cell's text in the module's row. */
+  @TestOnly
   @NotNull
   String moduleLevelText(@NotNull String moduleName) {
     ModuleLevelRow row = rowOf(moduleName);

@@ -49,7 +49,7 @@ public class SteppingIntegrationTest extends DapIntegrationTestBase {
   }
 
   @ParameterizedTest(name = "call line {0}")
-  @ValueSource(ints = {FIXTURE_CLOSURE_CALL_LINE, FIXTURE_CLOSURE_REAL_ARRAY_LINE})
+  @ValueSource(ints = {FIXTURE_CLOSURE_CALL_LINE, FIXTURE_CLOSURE_ARRAY_CALL_LINE, FIXTURE_CLOSURE_REAL_ARRAY_LINE})
   @DisplayName("step into enters the closure callee")
   public void stepIntoEntersTheClosureCallee(int callLine) throws Exception {
     StoppedEvent atCall = runToBreakpoint(FIXTURE_CLOSURE, callLine);
@@ -67,7 +67,7 @@ public class SteppingIntegrationTest extends DapIntegrationTestBase {
   }
 
   @ParameterizedTest(name = "call line {0}")
-  @ValueSource(ints = {FIXTURE_CLOSURE_CALL_LINE, FIXTURE_CLOSURE_REAL_ARRAY_LINE})
+  @ValueSource(ints = {FIXTURE_CLOSURE_CALL_LINE, FIXTURE_CLOSURE_ARRAY_CALL_LINE, FIXTURE_CLOSURE_REAL_ARRAY_LINE})
   @DisplayName("stepping inside the closure entered callee stays inside")
   public void steppingInsideTheClosureEnteredCalleeStaysInside(int callLine) throws Exception {
     // after ENTERING a closure-called function, the very next step must

@@ -68,7 +68,7 @@ public final class ContentHttpServer implements Closeable {
   private final HttpServer server;
   private final ExecutorService executor;
 
-  /** Optional observer of served requests ("GET /app.js -> 200"); for tests/diagnostics. */
+  /** Observer of served requests ("GET /app.js -> 200"): a seam the live probes set; production sets none. */
   private volatile Consumer<String> requestListener;
 
   public void setRequestListener(Consumer<String> listener) {
