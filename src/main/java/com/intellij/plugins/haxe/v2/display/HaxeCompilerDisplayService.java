@@ -480,12 +480,17 @@ public final class HaxeCompilerDisplayService implements Disposable {
     return known.methods().contains(method) ? new Connected(client, args, endpoint.id()) : null;
   }
 
-  /** What the endpoint's server answers on initialize, in the protocol its haxe speaks; null when it does not answer. */
+  /**
+   * What the endpoint's server answers on initialize, in the protocol its
+   * haxe speaks; null when it does not answer. The handshake is not counted
+   * in the server's request metrics: a fresh server refuses connections until
+   * it has bound its port, and those retried attempts are no failures of it.
+   */
   @Nullable
   private Capability capabilityOf(@NotNull Endpoint endpoint, @NotNull List<String> args, @Nullable String sdkName) {
     DisplayProtocol protocol = protocolOf(endpoint, sdkName);
     if (protocol == null) return null;
-    HaxeDisplayClient client = clientFor(endpoint, protocol);
+    HaxeDisplayClient client = handshakeClientFor(endpoint, protocol);
     InitializeResult initialized = withStartupRetry(endpoint.channel(), () -> client.initialize(args));
     if (initialized == null) return null;
     log.info(protocol + " display (haxe " + initialized.haxeVersion() + ") on port " + endpoint.id() + ", "
@@ -515,12 +520,18 @@ public final class HaxeCompilerDisplayService implements Disposable {
   /** A client for the endpoint in the protocol, whose requests count toward the server's console metrics. */
   @NotNull
   private HaxeDisplayClient clientFor(@NotNull Endpoint endpoint, @NotNull DisplayProtocol protocol) {
-    HaxeDisplayClient client = switch (protocol) {
+    HaxeDisplayClient client = handshakeClientFor(endpoint, protocol);
+    client.setObserver(HaxeServerMetrics.getInstance(project).observerFor(endpoint.metricsId()));
+    return client;
+  }
+
+  /** A client for the endpoint in the protocol whose requests no metrics see. */
+  @NotNull
+  private static HaxeDisplayClient handshakeClientFor(@NotNull Endpoint endpoint, @NotNull DisplayProtocol protocol) {
+    return switch (protocol) {
       case JSON_RPC -> new JsonRpcDisplayClient(endpoint.channel());
       case HAXE_3 -> new Haxe3DisplayClient(endpoint.channel());
     };
-    client.setObserver(HaxeServerMetrics.getInstance(project).observerFor(endpoint.metricsId()));
-    return client;
   }
 
   /**

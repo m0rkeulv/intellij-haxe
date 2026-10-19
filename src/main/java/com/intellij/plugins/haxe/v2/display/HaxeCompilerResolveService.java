@@ -247,6 +247,7 @@ public final class HaxeCompilerResolveService {
   @Nullable
   private BlueprintLookup blueprintLookup(@NotNull VirtualFile contextFile, @Nullable String dotPath) {
     if (dotPath == null || dotPath.isEmpty() || STD_TYPES_DECLARATIONS.contains(dotPath)) return null;
+    if (namesTypeParameter(dotPath)) return null;
     HaxeCompilerDisplayService.DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(contextFile);
     if (context == null) return null;
 
@@ -402,6 +403,15 @@ public final class HaxeCompilerResolveService {
       log.info("server/type failed for " + key.dotPath() + ": " + e.getMessage());
       return null;
     }
+  }
+
+  /**
+   * Whether the dot path names a type parameter rather than a type: the PSI
+   * qualifies a parameter as {@code Owner:T} or {@code Owner#method:T}, and
+   * no module declares it, so the server has no blueprint to answer with.
+   */
+  static boolean namesTypeParameter(@NotNull String dotPath) {
+    return dotPath.indexOf(':') >= 0 || dotPath.indexOf('#') >= 0;
   }
 
   /**
