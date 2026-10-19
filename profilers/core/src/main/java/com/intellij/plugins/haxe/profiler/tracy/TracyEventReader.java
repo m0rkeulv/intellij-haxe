@@ -4,6 +4,7 @@ import com.intellij.plugins.haxe.profiler.model.ProfilerFormatException;
 import com.intellij.plugins.haxe.profiler.model.TimelineEvent;
 import com.intellij.plugins.haxe.profiler.tracy.wire.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.DataInputStream;
@@ -206,6 +207,8 @@ public final class TracyEventReader {
     }
   }
 
+  /** The strict collecting form the fixture tests read zones with; a corrupt stream fails loud. */
+  @TestOnly
   @NotNull
   public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome) throws IOException {
     return read(decompressed, welcome, NO_HOOKS);

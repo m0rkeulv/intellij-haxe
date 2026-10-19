@@ -165,6 +165,8 @@ public final class HaxeDefineContextService implements Disposable, HaxeBuildSett
 
   @Override
   public void environmentChanged(@NotNull String containerId, @NotNull EnvironmentAspect aspect) {
+    // the server choice changes no define
+    if (aspect == EnvironmentAspect.COMPILATION_SERVER) return;
     invalidateAndRefresh();
   }
 

@@ -18,6 +18,7 @@ import com.intellij.plugins.haxe.v2.runconfig.HaxeDebugSupport;
 import com.intellij.plugins.haxe.v2.buildtools.*;
 import com.intellij.plugins.haxe.v2.testing.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
@@ -141,6 +142,8 @@ final class HaxeTestLaunchPlanner {
     return HaxeToolPathResolver.resolveNodeExecutable(project, null);
   }
 
+  /** The plan without the SDK node lookup: {@code nodeOnPath} stands in for the runtime a test machine may lack. */
+  @TestOnly
   @NotNull
   static Plan plan(@NotNull Project project,
                    @NotNull String buildFilePath,
@@ -149,6 +152,7 @@ final class HaxeTestLaunchPlanner {
     return plan(project, buildFilePath, filterPattern, null, bareNode(nodeOnPath), false);
   }
 
+  @TestOnly
   @NotNull
   static Plan planSingle(@NotNull Project project,
                          @NotNull String buildFilePath,

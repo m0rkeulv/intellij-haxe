@@ -69,8 +69,7 @@ public final class HaxeDebugAdditions {
       case HL, JAVA_SCRIPT -> List.of("-debug");
       case FLASH -> flashAdditions(debugger);
       case CPP -> cppAdditions(debugger);
-      // TODO: whether the before-run compile of an eval (INTERP) Debug launch adds -debug
-      //  (InterpDapBackend supplies -D eval-debugger per session)
+      // INTERP compiles as it runs: its launch adds -debug itself (InterpDapBackend.debuggeeArguments)
       default -> null;
     };
   }

@@ -95,6 +95,8 @@ public final class HaxeServerConsoleWindowFactory implements ToolWindowFactory, 
 
         @Override
         public void environmentChanged(@NotNull String containerId, @NotNull EnvironmentAspect aspect) {
+          // the build command changes neither a container's server nor its failures
+          if (aspect == EnvironmentAspect.COMPILE_COMMAND) return;
           updateStatusesLater(project, toolWindow);
         }
       });

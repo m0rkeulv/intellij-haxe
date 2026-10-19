@@ -99,7 +99,12 @@ interface HaxeChartData {
     return List.of();
   }
 
-  /** A small screenshot of the frame for the details panel; null until a lane can supply one. */
+  /**
+   * A small screenshot of the frame for the details panel; null until a lane
+   * can supply one.
+   * TODO: a lane producing frame images (the tracy wire's FrameImage events
+   *  are the candidate)
+   */
   default @Nullable Image frameImage(UsSpan frame) {
     return null;
   }
