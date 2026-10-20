@@ -34,6 +34,6 @@ public class HaxeJsCpuProfileParserProvider implements ProfilerDumpParserProvide
 
   @Override
   public @NotNull ProfilerDumpFileParser createParser(@NotNull Project project) {
-    return new HaxeStreamDumpParser(in -> HaxeSamplingProfilerData.from(CpuProfileTranslator.translate(in)));
+    return new HaxeStreamDumpParser((in, file) -> HaxeSamplingProfilerData.from(CpuProfileTranslator.translate(in), file));
   }
 }
