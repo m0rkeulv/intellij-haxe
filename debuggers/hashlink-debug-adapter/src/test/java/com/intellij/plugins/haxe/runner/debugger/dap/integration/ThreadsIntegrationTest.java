@@ -50,13 +50,13 @@ public class ThreadsIntegrationTest extends DapIntegrationTestBase {
     assertEquals("main", main.getName(), "lowest id is named main");
 
     // the worker (the stopped thread) shows its own frame + local
-    Map<String, String> workerLocals = localsOf(stoppedThreadId);
+    Map<String, String> workerLocals = localsInTopFrame(stoppedThreadId);
     assertEquals("222", workerLocals.get("workerLocal"), "worker local (workerLocal=222)");
 
     // the OTHER thread (main) shows a DIFFERENT stack + its own local — the
     // decisive per-thread check: main is parked in block(v=111)
     int mainThreadId = otherThread(threads, stoppedThreadId);
-    Map<String, String> mainLocals = localsOf(mainThreadId);
+    Map<String, String> mainLocals = localsInTopFrame(mainThreadId);
     assertEquals("111", mainLocals.get("v"), "main's block() argument (v=111)");
     assertTrue(topFrameName(mainThreadId).endsWith("block"), "main's top frame is block(), not the worker");
 
@@ -96,10 +96,6 @@ public class ThreadsIntegrationTest extends DapIntegrationTestBase {
 
   private List<DapThread> threadList() throws Exception {
     return ((ThreadsResponse)request(new ThreadsRequest())).getBody().getThreads();
-  }
-
-  private Map<String, String> localsOf(int threadId) throws Exception {
-    return variablesByName(localsScopeReference(topFrameId(threadId)));
   }
 
   private static DapThread lowestId(List<DapThread> threads) {
