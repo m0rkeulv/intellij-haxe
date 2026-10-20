@@ -36,7 +36,7 @@ interface HaxeChartLiveReader {
           reader = HxtLiveSession.open(sessionFile);
         }
         boolean grew = reader.poll();
-        return force || grew ? new HaxeSnapshotChartData(reader.snapshot()) : null;
+        return force || grew ? new HaxeSnapshotChartData(reader.snapshot(), sessionFile) : null;
       }
 
       @Override

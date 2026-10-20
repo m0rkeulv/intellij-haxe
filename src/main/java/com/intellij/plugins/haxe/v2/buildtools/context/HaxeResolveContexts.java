@@ -2,7 +2,6 @@ package com.intellij.plugins.haxe.v2.buildtools.context;
 
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.LibraryOrderEntry;
 import com.intellij.openapi.roots.OrderEntry;
@@ -94,7 +93,8 @@ public final class HaxeResolveContexts {
     if (!owners.isEmpty()) {
       return new HaxeResolveContext(preferred(file, owners).buildFile());
     }
-    Module module = ModuleUtilCore.findModuleForFile(file, project);
+    // a generated file in an excluded folder (lime's export) belongs to its module all the same
+    Module module = ProjectFileIndex.getInstance(project).getModuleForFile(file, false);
     HaxeBuildFile fallback = module == null ? null : defaultBuildFileFor(module);
     return fallback == null ? null : new HaxeResolveContext(fallback);
   }
