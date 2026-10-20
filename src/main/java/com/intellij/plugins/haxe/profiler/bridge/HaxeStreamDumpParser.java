@@ -24,7 +24,10 @@ import java.nio.file.Files;
  */
 public final class HaxeStreamDumpParser implements ProfilerDumpFileParser {
 
-  /** Translates the dump into the data the profiler tool window shows; {@code file} is the dump, which frame navigation anchors on. */
+  /**
+   * Translates the dump into the data the profiler tool window shows. {@code file} is the dump's own path;
+   * frame navigation uses it to pick the sources of the build the dump came from.
+   */
   public interface Reader {
     @NotNull
     ProfilerData read(@NotNull InputStream in, @NotNull Path file) throws IOException;

@@ -93,7 +93,7 @@ public final class HaxeResolveContexts {
     if (!owners.isEmpty()) {
       return new HaxeResolveContext(preferred(file, owners).buildFile());
     }
-    // a generated file in an excluded folder (lime's export) belongs to its module all the same
+    // honorExclusion = false: a generated file in an excluded folder (lime's export) still gets its module
     Module module = ProjectFileIndex.getInstance(project).getModuleForFile(file, false);
     HaxeBuildFile fallback = module == null ? null : defaultBuildFileFor(module);
     return fallback == null ? null : new HaxeResolveContext(fallback);

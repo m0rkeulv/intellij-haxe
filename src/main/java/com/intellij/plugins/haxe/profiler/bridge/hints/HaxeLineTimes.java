@@ -214,7 +214,10 @@ final class HaxeLineTimes {
   private record Declaration(String path, int line) {
   }
 
-  /** Runs inside the read action: each symbol's declaration position, resolved via the project's classes nearest the capture. */
+  /**
+   * Runs inside the read action: each symbol's declaration position, resolved via the project's classes, preferring
+   * those nearest the capture.
+   */
   private static Map<String, Declaration> resolveDeclarations(Project project, Collection<String> symbols, @Nullable Path capture) {
     Map<String, Declaration> resolved = new HashMap<>();
     for (String symbol : symbols) {

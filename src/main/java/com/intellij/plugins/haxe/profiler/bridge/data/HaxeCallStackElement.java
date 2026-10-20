@@ -43,12 +43,17 @@ import java.util.function.Function;
  * a qualified name ({@code pack.Class.method}) against the project's Haxe
  * classes — the longest symbol prefix that names a class wins, so a
  * closure symbol ({@code Main.update.closure}) still lands on its
- * enclosing method. A frame remembers the capture file it came from: a
- * relative path (the collector reports positions relative to the build's
- * working directory) is resolved under the capture's ancestors first, which
- * reaches generated sources in excluded folders that no index holds; when a
- * symbol or a path still names several files (every lime module generates
- * its own {@code ApplicationMain}), the one nearest the capture wins.
+ * enclosing method.
+ * <p>
+ * A frame also remembers the capture file it came from, which tells the
+ * sources of the profiled build apart from same-named ones of other builds.
+ * Some collectors (Tracy, hxcpp telemetry) report paths relative to the
+ * build's working directory; such a path is looked up under the capture's
+ * ancestors first, which also reaches generated sources in excluded folders
+ * that no index holds. When a symbol or a path still matches several files
+ * (every lime module and target generates its own {@code ApplicationMain}),
+ * the one nearest the capture wins: the one sharing the most leading path
+ * segments with it.
  */
 public final class HaxeCallStackElement extends BaseCallStackElement {
 
@@ -128,7 +133,7 @@ public final class HaxeCallStackElement extends BaseCallStackElement {
    * The declaration a bare qualified symbol names: the longest symbol
    * prefix that names a class wins, then its member (or the class itself)
    * — a closure symbol ({@code Main.update.2}) lands on its enclosing
-   * method. Among same-named classes the one nearest {@code capture} wins.
+   * method. Among classes sharing a runtime name, the one nearest {@code capture} wins.
    * Hits the resolver and indexes; call under a read action.
    */
   @Nullable
@@ -162,10 +167,10 @@ public final class HaxeCallStackElement extends BaseCallStackElement {
   }
 
   /**
-   * An absolute path opens directly; a collector-relative one is looked for
-   * under the capture's ancestors (the build's working directory is one), else
-   * matched against the project file whose path ends with it, the one nearest
-   * the capture when several do; null for one naming no usable path.
+   * An absolute path opens directly. A collector-relative one is looked up
+   * under the capture's ancestors (the build's working directory is one of
+   * them), else among the indexed files whose path ends with it, the one
+   * nearest the capture winning. Null when no file is found.
    */
   @Nullable
   private VirtualFile findVirtualFile(Project project) {
@@ -185,9 +190,9 @@ public final class HaxeCallStackElement extends BaseCallStackElement {
   }
 
   /**
-   * The relative path under the first ancestor of the capture file that holds
-   * it. The captures folder itself may be newer than the VFS knows, so the
-   * walk starts from the first ancestor the VFS has.
+   * The file at the relative path under the nearest ancestor of the capture
+   * file that holds it. Ancestors the VFS does not know yet (a freshly
+   * written captures folder) are skipped.
    */
   @Nullable
   private VirtualFile findUnderCaptureAncestors(@NotNull String relativePath) {
@@ -211,7 +216,7 @@ public final class HaxeCallStackElement extends BaseCallStackElement {
     return HaxeResolveUtil.findClassByQName(className, psiManager, scope);
   }
 
-  /** The candidate sharing the longest path prefix with the capture file; the first one without a capture to go by. */
+  /** The candidate sharing the most leading path segments with the capture; the first one when there is no capture. */
   private static <T> T nearest(@NotNull List<T> candidates, @NotNull Function<T, String> pathOf, @Nullable Path capture) {
     if (capture == null || candidates.size() == 1) return candidates.getFirst();
     String anchor = capture.toString().replace('\\', '/');
