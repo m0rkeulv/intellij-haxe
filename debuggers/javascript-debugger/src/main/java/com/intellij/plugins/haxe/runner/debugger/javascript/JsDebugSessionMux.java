@@ -628,13 +628,8 @@ public final class JsDebugSessionMux implements DapEndpoint {
           mergedEvents.offer(initialized); // workers' handshakes are mux-internal
         }
       }
-      default -> {
-        if (k == 0) {
-          mergedEvents.offer(event); // output etc. from the page as-is
-        } else {
-          mergedEvents.offer(event); // worker output flows too
-        }
-      }
+      // output and the rest flow as-is, from the page and from every worker
+      default -> mergedEvents.offer(event);
     }
   }
 

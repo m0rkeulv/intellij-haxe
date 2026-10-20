@@ -76,8 +76,6 @@ public class EvalDebugAdapter implements Closeable {
 
   private DapConnection dap;
   private EvalConnection vmConnection;
-  private Thread acceptThread;
-  private Thread requestThread;
   private volatile boolean closed = false;
 
   /** ON = raw sub-expression steps + exact expression spans in stack frames. */
@@ -159,8 +157,8 @@ public class EvalDebugAdapter implements Closeable {
   /** Starts the adapter threads against an established DAP connection. */
   public void start(DapConnection dapConnection) {
     this.dap = dapConnection;
-    acceptThread = daemon("eval-vm-accept", this::acceptVm);
-    requestThread = daemon("eval-dap-requests", this::requestLoop);
+    daemon("eval-vm-accept", this::acceptVm);
+    daemon("eval-dap-requests", this::requestLoop);
   }
 
   private static Thread daemon(String name, Runnable body) {

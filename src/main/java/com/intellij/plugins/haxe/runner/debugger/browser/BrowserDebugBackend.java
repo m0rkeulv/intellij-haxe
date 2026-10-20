@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.runner.debugger.browser;
 
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.plugins.haxe.HaxeDebuggerBundle;
 import com.intellij.plugins.haxe.runner.debugger.browser.BrowserRunConfiguration.BrowserFamily;
 import com.intellij.plugins.haxe.runner.debugger.dap.client.DapClient;
@@ -57,7 +56,6 @@ import com.intellij.plugins.haxe.runner.debugger.javascript.NodeLocator;
  * the debug process's request thread — never the EDT.
  */
 public class BrowserDebugBackend implements DapBackend {
-  private static final Logger LOG = Logger.getInstance(BrowserDebugBackend.class);
   /** Serve mode (firefox only): delay of the one-shot first-page refresh. */
   private static final int FIRST_PAGE_REFRESH_SECONDS = 2;
 
@@ -79,7 +77,6 @@ public class BrowserDebugBackend implements DapBackend {
   private volatile DapClient parentClient;
   /** Chromium only: the page+workers multiplexer (owns parent + all children). */
   private volatile JsDebugSessionMux sessionMux;
-  private volatile boolean closed;
 
   public BrowserDebugBackend(BrowserFamily family,
                              String configuredNodePath,
@@ -329,7 +326,6 @@ public class BrowserDebugBackend implements DapBackend {
 
   @Override
   public void close() {
-    closed = true;
     ContentHttpServer server = contentServer;
     contentServer = null;
     if (server != null) {
