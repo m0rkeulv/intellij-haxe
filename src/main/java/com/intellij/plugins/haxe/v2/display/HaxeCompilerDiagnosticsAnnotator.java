@@ -69,8 +69,10 @@ public class HaxeCompilerDiagnosticsAnnotator extends HaxeCompilerDiagnosticsAnn
   @Override
   protected void annotate(@NotNull AnnotationHolder holder, @NotNull PsiFile file, @NotNull Document document,
                           @NotNull Diagnostic diagnostic, @NotNull TextRange range) {
-    AnnotationBuilder builder =
-      holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), HaxeDiagnosticsFetcher.messageOf(diagnostic)).range(range);
+    String message = HaxeDiagnosticsFetcher.messageOf(diagnostic);
+    AnnotationBuilder builder = holder.newAnnotation(HaxeDiagnosticsFetcher.severityOf(diagnostic), HaxeCompilerMessages.plainText(message))
+      .tooltip(HaxeCompilerMessages.html(message))
+      .range(range);
     switch (diagnostic.kind()) {
       case UNRESOLVED_IDENTIFIER -> builder = builder.highlightType(ProblemHighlightType.LIKE_UNKNOWN_SYMBOL);
       case DEPRECATION_WARNING -> builder = builder.highlightType(ProblemHighlightType.LIKE_DEPRECATED);
