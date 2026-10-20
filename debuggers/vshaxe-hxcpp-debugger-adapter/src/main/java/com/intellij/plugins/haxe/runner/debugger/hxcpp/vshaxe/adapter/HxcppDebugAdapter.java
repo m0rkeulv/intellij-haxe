@@ -76,10 +76,6 @@ public class HxcppDebugAdapter implements Closeable {
 
   private DapConnection dap;
 
-  private Thread acceptThread;
-  private Thread requestThread;
-  private Thread pumpThread;
-
   private volatile boolean closed = false;
   /** Thread the server last reported stopped; null while running. */
   private volatile Integer stoppedThreadId;
@@ -103,9 +99,9 @@ public class HxcppDebugAdapter implements Closeable {
   /** Starts the adapter threads against an established DAP connection. */
   public void start(DapConnection dapConnection) {
     this.dap = dapConnection;
-    acceptThread = daemon("hxcpp-debuggee-accept", this::acceptDebuggee);
-    requestThread = daemon("hxcpp-dap-requests", this::requestLoop);
-    pumpThread = daemon("hxcpp-event-pump", this::pumpLoop);
+    daemon("hxcpp-debuggee-accept", this::acceptDebuggee);
+    daemon("hxcpp-dap-requests", this::requestLoop);
+    daemon("hxcpp-event-pump", this::pumpLoop);
   }
 
   private static Thread daemon(String name, Runnable body) {
