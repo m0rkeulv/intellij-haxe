@@ -35,11 +35,6 @@ public final class HaxeDisplayTransport {
     public DisplayResponse request(List<String> args, int readTimeoutMs) throws DisplayRequestException {
       return HaxeDisplayTransport.request(host, port, args, readTimeoutMs);
     }
-
-    @Override
-    public String describe() {
-      return "haxe server at " + host + ":" + port;
-    }
   }
 
   public static DisplayResponse request(String host, int port, List<String> args, int readTimeoutMs)

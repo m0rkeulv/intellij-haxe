@@ -74,11 +74,6 @@ public final class Haxe3DisplayClient implements HaxeDisplayClient {
     channel.setObserver(observer);
   }
 
-  @Override
-  public boolean isChannelBroken() {
-    return channel.channel().isBroken();
-  }
-
   /** The version {@code -version} reports and {@link #METHODS}. */
   @Override
   public InitializeResult initialize(List<String> baseArgs) throws DisplayRequestException {
