@@ -31,13 +31,6 @@ public interface HaxeCompilerSettings {
   @NotNull
   HaxeLanguageLevel getDefaultLanguageLevel();
 
-  /**
-   * The effective default for one container: same as {@link #getDefaultLanguageLevel()},
-   * except that "use compiler level" mode resolves the CONTAINER's SDK, so
-   * containers with different Environment SDKs get different levels.
-   */
-  @NotNull
-  HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String containerId);
 
   /** The explicitly chosen default level, or null in "use compiler level" mode. */
   @Nullable
@@ -58,6 +51,11 @@ public interface HaxeCompilerSettings {
   /** Sets or clears (when {@code level} is null) the override for a single container. */
   void setContainerLanguageLevelOverride(@NotNull String containerId, @Nullable HaxeLanguageLevel level);
 
+  /**
+   * The container's level: its override, else the default - where "use
+   * compiler level" resolves the CONTAINER's SDK, so containers with different
+   * Environment SDKs get different levels.
+   */
   @NotNull
   HaxeLanguageLevel getEffectiveLanguageLevel(@NotNull String containerId);
 

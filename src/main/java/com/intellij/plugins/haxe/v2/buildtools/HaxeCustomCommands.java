@@ -154,7 +154,7 @@ public final class HaxeCustomCommands {
                                          @Nullable String moduleRoot,
                                          @Nullable String projectRoot) {
     String withTools = expandTools(project, environmentSdk, command);
-    return parse(expandRoots(withTools, moduleRoot, projectRoot));
+    return ParametersListUtil.parse(expandRoots(withTools, moduleRoot, projectRoot));
   }
 
   /** The value as one command-line argument: wrapped in double quotes when it contains whitespace. */
@@ -172,11 +172,5 @@ public final class HaxeCustomCommands {
                                             @Nullable String moduleRoot, @Nullable String projectRoot) {
     if (StringUtil.isEmptyOrSpaces(workDirectory)) return fallback;
     return expandRoots(workDirectory, moduleRoot, projectRoot);
-  }
-
-  /** Parses a user-typed command into its arguments; the program name is resolved through PATH only when launched. */
-  @NotNull
-  public static List<String> parse(@NotNull String command) {
-    return ParametersListUtil.parse(command);
   }
 }

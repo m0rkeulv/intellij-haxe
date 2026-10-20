@@ -1,6 +1,5 @@
 package com.intellij.plugins.haxe.v2.buildtools.context;
 
-import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -44,7 +43,7 @@ import java.util.Set;
  * writing its output does not.
  */
 @Service(Service.Level.PROJECT)
-public final class HaxeResolveContexts implements Disposable {
+public final class HaxeResolveContexts {
 
   /**
    * One build, the source directories it compiles and the haxelibs its selected
@@ -71,10 +70,6 @@ public final class HaxeResolveContexts implements Disposable {
 
   public HaxeResolveContexts(@NotNull Project project) {
     this.project = project;
-  }
-
-  @Override
-  public void dispose() {
   }
 
   @NotNull
