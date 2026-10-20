@@ -60,12 +60,11 @@ import java.util.TreeMap;
  * EVENTS(11): i32 count, count * (i32 threadId, i64 ns, i32 rgb,
  *            u16+utf8 text) — instant marks (tracy messages)
  * INFO  (7): u16+utf8 programName, u64 pid, u64 epoch, i64 durationNs,
- *            i32 unmatchedZoneEnds, i64 baseNs, u8 deflateLevel (optional
- *            trailing — provenance only, inflate never needs it) —
- *            written LAST
+ *            i32 unmatchedZoneEnds, i64 baseNs, u8 deflateLevel
+ *            (provenance only, inflate never needs it) — written LAST
  *
- * All series times are RAW nanoseconds like the zones (v5 carried them
- * pre-rebased); the reader subtracts INFO's baseNs. Series records
+ * All series times are RAW nanoseconds like the zones; the reader
+ * subtracts INFO's baseNs. Series records
  * (FRAMES/PLOT/CPU/PCPU/MEMORY/GC/EVENTS) may repeat — a live capture
  * streams increments — and readers APPEND them; a later THREAD record for
  * the same id overrides the earlier one.

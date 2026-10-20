@@ -211,13 +211,7 @@ public final class TracyEventReader {
   @TestOnly
   @NotNull
   public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome) throws IOException {
-    return read(decompressed, welcome, NO_HOOKS);
-  }
-
-  @NotNull
-  public static TracySession read(@NotNull InputStream decompressed, @NotNull TracyWelcome welcome,
-                                  @NotNull Hooks hooks) throws IOException {
-    return readSession(decompressed, welcome, hooks, null, false);
+    return readSession(decompressed, welcome, NO_HOOKS, null, false);
   }
 
   /**
