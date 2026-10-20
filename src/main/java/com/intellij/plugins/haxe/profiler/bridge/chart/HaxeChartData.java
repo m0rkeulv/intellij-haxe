@@ -25,7 +25,7 @@ interface HaxeChartData {
   /** Deeper frames fold into their ancestor; the flamegraph tab still shows full depth. */
   int MAX_DEPTH = 64;
 
-  /** The capture file the data came from, which frame navigation prefers declarations near; null for a stream. */
+  /** The capture file the data came from; frame navigation prefers the sources nearest it. Null when there is none. */
   default @Nullable Path captureFile() {
     return null;
   }

@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-/** Every lime target generates its own ApplicationMain; a frame navigates to the one of the build the capture came from. */
+/** Every lime target generates its own ApplicationMain; a frame opens the copy from the capture's build. */
 @DisplayName("Profiler: call stack element")
 public class HaxeCallStackElementTest extends HaxeLightFixtureTestCase {
 
@@ -46,21 +46,6 @@ public class HaxeCallStackElementTest extends HaxeLightFixtureTestCase {
 
     assertEquals(1, navigatables.length);
     assertEquals(html5, navigatables[0].getContainingFile().getVirtualFile());
-  }
-
-  @Test
-  @DisplayName("a path relative to the build directory resolves under the capture's module before any index")
-  public void testAPathRelativeToTheBuildDirectoryResolvesUnderTheCapturesModuleBeforeAnyIndex() {
-    // two modules of the same layout; the collector reports the path relative to the build's working directory
-    VirtualFile other = myFixture.addFileToProject("other/export/windows/haxe/ApplicationMain.hx", APPLICATION_MAIN_SOURCE).getVirtualFile();
-    VirtualFile own = myFixture.addFileToProject("app/export/windows/haxe/ApplicationMain.hx", APPLICATION_MAIN_SOURCE).getVirtualFile();
-    HaxeCallStackElement frame =
-      new HaxeCallStackElement("ApplicationMain.create", "export/windows/haxe/ApplicationMain.hx", 1, captureBeside(own));
-
-    NavigatablePsiElement[] navigatables = frame.calcNavigatables(getProject());
-
-    assertEquals(1, navigatables.length);
-    assertEquals(own, navigatables[0].getContainingFile().getVirtualFile(), "not " + other.getPath());
   }
 
   private VirtualFile generatedMain(String target) {

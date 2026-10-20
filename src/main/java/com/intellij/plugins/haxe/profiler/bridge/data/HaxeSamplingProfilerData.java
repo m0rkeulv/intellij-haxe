@@ -42,7 +42,7 @@ public final class HaxeSamplingProfilerData extends HaxeChartedProfilerData {
   private static final String GC_SYMBOL = "GC Major";
 
   private final ProfilerSnapshot snapshot;
-  /** The session file this data was parsed from; a still-live capture of it renders the self-refreshing view. */
+  /** The session or dump file this data was parsed from; a still-live session renders the self-refreshing view. */
   private final @Nullable Path sourceFile;
 
   private HaxeSamplingProfilerData(MultipleCallTreesProfilerData trees, ProfilerSnapshot snapshot, @Nullable Path sourceFile) {
@@ -51,7 +51,7 @@ public final class HaxeSamplingProfilerData extends HaxeChartedProfilerData {
     this.sourceFile = sourceFile;
   }
 
-  /** The session file this data was parsed from, or null for a capture that came through a stream. */
+  /** The session or dump file this data was parsed from; null when it was built without one. */
   @Nullable
   public Path sourceFile() {
     return sourceFile;
@@ -61,11 +61,6 @@ public final class HaxeSamplingProfilerData extends HaxeChartedProfilerData {
   @NotNull
   public ProfilerSnapshot snapshot() {
     return snapshot;
-  }
-
-  @NotNull
-  public static HaxeSamplingProfilerData from(@NotNull ProfilerSnapshot snapshot) {
-    return from(snapshot, null);
   }
 
   @NotNull

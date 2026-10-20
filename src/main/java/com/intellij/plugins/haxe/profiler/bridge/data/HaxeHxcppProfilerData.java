@@ -30,7 +30,7 @@ public final class HaxeHxcppProfilerData extends SingleCallTreeProfilerData {
     super(tree);
   }
 
-  /** {@code capture} is the report file; the symbols carry no positions, so navigation resolves them near it. */
+  /** {@code capture} is the report; its symbols carry no positions, so navigation picks the declarations nearest it. */
   @NotNull
   public static HaxeHxcppProfilerData from(@NotNull HxcppProfileReport report, @Nullable Path capture) {
     // the report is per-process with no thread data; hxcpp profiles the thread that called start()
