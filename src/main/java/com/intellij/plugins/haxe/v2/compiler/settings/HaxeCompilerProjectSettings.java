@@ -72,11 +72,6 @@ public final class HaxeCompilerProjectSettings implements HaxeCompilerSettings, 
   }
 
   @Override
-  public @NotNull HaxeLanguageLevel getDefaultLanguageLevel(@NotNull String containerId) {
-    return defaultLevelFor(containerId);
-  }
-
-  @Override
   public @Nullable HaxeLanguageLevel getExplicitDefaultLanguageLevel() {
     return HaxeLanguageLevel.fromVersionString(state.defaultLanguageLevel);
   }

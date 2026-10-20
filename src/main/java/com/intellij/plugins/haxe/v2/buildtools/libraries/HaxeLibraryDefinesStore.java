@@ -17,13 +17,8 @@ import java.util.Map;
 @Service(Service.Level.PROJECT)
 public final class HaxeLibraryDefinesStore {
 
-  private final Project project;
   /** container id -> dependency name -> (define name -> value: the version, or {@code 1} when haxelib printed none). */
   private volatile Map<String, Map<String, Map<String, String>>> byContainer = Map.of();
-
-  public HaxeLibraryDefinesStore(@NotNull Project project) {
-    this.project = project;
-  }
 
   @NotNull
   public static HaxeLibraryDefinesStore getInstance(@NotNull Project project) {
