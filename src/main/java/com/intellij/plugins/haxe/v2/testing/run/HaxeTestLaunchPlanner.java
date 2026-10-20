@@ -108,25 +108,11 @@ final class HaxeTestLaunchPlanner {
     return binDirectory == null ? null : binDirectory.resolve(LimeProjects.HL_BOOT_FILE);
   }
 
-  @NotNull
-  static Plan plan(@NotNull Project project,
-                   @NotNull String buildFilePath,
-                   @Nullable String filterPattern) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, null, nodeExecutable(project), false);
-  }
-
   /** The configuration's plan, single-run narrowing included. */
   @NotNull
   static Plan planFor(@NotNull HaxeTestRunConfiguration configuration) throws ExecutionException {
     return plan(configuration.getProject(), configuration.getBuildFilePath(), configuration.getFilterPattern(),
                 configuration.singleRun(), nodeExecutable(configuration.getProject()), false);
-  }
-
-  @NotNull
-  static Plan planForDebug(@NotNull Project project,
-                           @NotNull String buildFilePath,
-                           @Nullable String filterPattern) throws ExecutionException {
-    return plan(project, buildFilePath, filterPattern, null, nodeExecutable(project), true);
   }
 
   /** The debug executor's plan: its before-run compile injects the debug additions, which for hxcpp rename the binary. */

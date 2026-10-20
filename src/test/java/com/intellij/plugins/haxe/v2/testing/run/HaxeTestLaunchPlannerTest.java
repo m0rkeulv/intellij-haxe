@@ -77,6 +77,14 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     return "/testing/runner/";
   }
 
+  /** A configuration for the build file, as the Debug executor plans it. */
+  private HaxeTestRunConfiguration configurationFor(String buildFilePath) {
+    HaxeTestRunConfigurationType type = new HaxeTestRunConfigurationType();
+    HaxeTestRunConfiguration configuration = new HaxeTestRunConfiguration(getProject(), type.getFactory(), "planner");
+    configuration.setBuildFilePath(buildFilePath);
+    return configuration;
+  }
+
   /** Copies the named fixture into the scratch directory and returns its real path. */
   private String fixturePath(String relativePath) {
     try {
@@ -296,7 +304,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     assertTrue(debugHxml.command().get(0).endsWith(debugBinary),
                "a --debug hxml produces the -debug binary even for plain runs: " + debugHxml.command());
 
-    Plan debugExecutor = HaxeTestLaunchPlanner.planForDebug(getProject(), fixturePath("targets/cpp.hxml"), null);
+    Plan debugExecutor = HaxeTestLaunchPlanner.planForDebug(configurationFor(fixturePath("targets/cpp.hxml")));
     assertTrue(debugExecutor.command().get(0).endsWith(debugBinary),
                "the debug executor's compile additions rename the binary: " + debugExecutor.command());
   }
@@ -347,7 +355,7 @@ public class HaxeTestLaunchPlannerTest extends HaxeLightFixtureTestCase {
     assertTrue(plan.command().get(3).replace('\\', '/').endsWith("/bin"),
                "the content root is the swf's directory: " + plan.command());
 
-    Plan debug = HaxeTestLaunchPlanner.planForDebug(getProject(), path, null);
+    Plan debug = HaxeTestLaunchPlanner.planForDebug(configurationFor(path));
     assertFalse(debug.command().contains("-nodebug"),
                 "a debug launch keeps adl's default mode - the -debug swf dials the waiting fdb: " + debug.command());
     assertTrue(debug.command().get(1).endsWith("application.xml"),

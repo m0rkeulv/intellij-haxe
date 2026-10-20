@@ -64,7 +64,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     HaxeTestRunConfiguration configuration = newConfiguration(buildFile.getPath());
     assertDoesNotThrow(configuration::checkConfiguration, "the interp fixture must validate");
 
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    Plan plan = HaxeTestLaunchPlanner.planFor(newConfiguration(buildFile.getPath()));
     assertTrue(plan.singleStage(), "the fixture targets --interp");
 
     RecordingEventsProcessor recorder = runThroughConverter(configuration, plan, 0);
@@ -95,7 +95,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     VirtualFile buildFile = myFixture.findFileInTempDir("utest/test.hxml");
     assertNotNull(buildFile, "the utest fixture must be copied");
 
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    Plan plan = HaxeTestLaunchPlanner.planFor(newConfiguration(buildFile.getPath()));
     // utest exits 1: the assertion-less test counts as a warning and warnings make its stats not-ok
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
 
@@ -136,7 +136,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
 
     compileTestsBuild(buildFile);
 
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    Plan plan = HaxeTestLaunchPlanner.planFor(newConfiguration(buildFile.getPath()));
     assertEquals("-nodebug", plan.command().get(1), "adl's default debug-launch mode swallows trace output");
     // the injected reporter's completion handler runs FIRST (attached in
     // Runner's constructor) and exits with 0 - the batch replay never prints
@@ -168,7 +168,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     assertEquals("munit", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
     compileTestsBuild(buildFile);
 
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    Plan plan = HaxeTestLaunchPlanner.planFor(newConfiguration(buildFile.getPath()));
     // munit's classic TestMain exits 0 even on failures (its delayed
     // completion handler misses the process end) - verdicts are events-only
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 0);
@@ -205,7 +205,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     assertNotNull(buildFile, "the buddy fixture must be copied");
 
     assertEquals("buddy", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    Plan plan = HaxeTestLaunchPlanner.planFor(newConfiguration(buildFile.getPath()));
     // buddy's generated main exits 1 on a failing spec
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
 
@@ -244,7 +244,7 @@ public class HaxeTestRunnerPipelineTest extends HaxeCodeInsightFixtureTestCase {
     assertNotNull(buildFile, "the tink fixture must be copied");
 
     assertEquals("tink_unittest", HaxeTestFrameworks.forBuildFile(getProject(), buildFile.getPath()).libraryName());
-    Plan plan = HaxeTestLaunchPlanner.plan(getProject(), buildFile.getPath(), null);
+    Plan plan = HaxeTestLaunchPlanner.planFor(newConfiguration(buildFile.getPath()));
     // Runner.exit reports the failure count as the exit code
     RecordingEventsProcessor recorder = runThroughConverter(newConfiguration(buildFile.getPath()), plan, 1);
 

@@ -32,7 +32,6 @@ import java.util.Set;
 import com.intellij.plugins.haxe.v2.buildtools.libraries.HaxeLibraryGraph;
 import java.util.Objects;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
