@@ -43,7 +43,7 @@ public final class HaxeTestFrameworks {
    * Call inside a read action.
    */
   @Nullable
-  public static HaxeTestFramework detectedFrameworkFor(@NotNull Project project, @NotNull String buildFilePath) {
+  private static HaxeTestFramework detectedFrameworkFor(@NotNull Project project, @NotNull String buildFilePath) {
     HaxeBuildFile buildFile = HaxeBuildFileScanner.findBuildFile(project, buildFilePath);
     if (buildFile == null) return null;
     return detectedFramework(HaxeBuildSections.inspectSelected(project, buildFile).libraries());
