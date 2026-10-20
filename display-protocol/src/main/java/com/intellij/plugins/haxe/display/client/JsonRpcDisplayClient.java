@@ -55,11 +55,6 @@ public class JsonRpcDisplayClient implements HaxeDisplayClient {
     channel.setObserver(observer);
   }
 
-  @Override
-  public boolean isChannelBroken() {
-    return channel.channel().isBroken();
-  }
-
   // --- lifecycle / capability ---
 
   @Override

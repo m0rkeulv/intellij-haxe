@@ -29,11 +29,6 @@ final class RecordingChannel implements DisplayChannel {
     return answers.isEmpty() ? new DisplayResponse("", List.of(), false) : answers.removeFirst();
   }
 
-  @Override
-  public String describe() {
-    return "recording channel";
-  }
-
   /** The {@code --display} value of the last request. */
   String lastDisplayArgument() {
     List<String> last = requests.getLast();

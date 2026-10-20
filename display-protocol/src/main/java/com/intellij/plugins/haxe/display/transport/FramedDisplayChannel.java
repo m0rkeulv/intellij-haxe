@@ -121,11 +121,6 @@ public final class FramedDisplayChannel implements DisplayChannel, Closeable {
   }
 
   @Override
-  public String describe() {
-    return description;
-  }
-
-  @Override
   public void close() {
     broken = true;
     try {

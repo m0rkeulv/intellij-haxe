@@ -60,11 +60,6 @@ public class HaxeDisplayClientObserverTest {
       public DisplayResponse request(List<String> args, int readTimeoutMs) {
         return response;
       }
-
-      @Override
-      public String describe() {
-        return "canned channel";
-      }
     };
   }
 }

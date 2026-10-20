@@ -49,11 +49,6 @@ public class HaxeDisplayClientTimeoutTest {
         timeouts.add(readTimeoutMs);
         throw new DisplayRequestException("recording channel answers nothing");
       }
-
-      @Override
-      public String describe() {
-        return "recording channel";
-      }
     };
   }
 }

@@ -218,13 +218,8 @@ public class HaxeIuTelemetryCapture implements HaxeTelemetryCapture {
         HaxeProfilingNotifier.reportNothingCaptured(project, session, noneMessageFor(lane));
         return;
       }
-      if (session != null) {
-        session.dataReady();
-        return;
-      }
-      long receivedKb = receivedBytes / 1024;
-      String content = HaxeProfilerBundle.message("haxe.profiler.telemetry.captured", sessionFile.toString(), receivedKb);
-      HaxeProfilingNotifier.notifySnapshotReady(project, content, sessionFile);
+      // the tab opened when the collector connected, before the first byte counted
+      session.dataReady();
     }
   }
 }

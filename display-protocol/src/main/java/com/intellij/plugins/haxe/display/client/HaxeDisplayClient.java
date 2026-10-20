@@ -43,9 +43,6 @@ public interface HaxeDisplayClient {
 
   void setObserver(RequestObserver observer);
 
-  /** Whether the channel behind this client is closed for good; further requests fail without reaching a server. */
-  boolean isChannelBroken();
-
   // --- lifecycle / capability ---
 
   /** The server's haxe version and the methods it answers. */
