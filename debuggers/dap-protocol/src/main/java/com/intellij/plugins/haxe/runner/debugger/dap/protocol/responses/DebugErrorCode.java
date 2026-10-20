@@ -30,8 +30,4 @@ public enum DebugErrorCode {
   public int id() {
     return id;
   }
-
-  public boolean matches(ErrorMessage error) {
-    return error != null && error.getId() == id;
-  }
 }
