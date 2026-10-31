@@ -2,6 +2,8 @@ package com.intellij.plugins.haxe.v2.display;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.plugins.haxe.display.protocol.DisplayMethods;
@@ -12,8 +14,10 @@ import com.intellij.plugins.haxe.v2.compiler.settings.HaxeCompilerSettings;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.DisplayContext;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.FilePayload;
 import com.intellij.plugins.haxe.v2.display.HaxeCompilerDisplayService.FileRequest;
+import com.intellij.psi.util.PsiModificationTracker;
 import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.concurrent.Future;
@@ -28,6 +32,8 @@ import java.util.concurrent.Future;
  * changes is invalidated on the server first, because the server ignores
  * {@code contents} for a module it has cached. An offset travels as the
  * server counts it in the text it reads ({@link HaxeServerOffsets}).
+ * Go-to-declaration answers are kept ({@link HaxeDefinitionCache}), so the
+ * click that follows a Ctrl-hover, or a repeated hover, sends no new request.
  *
  * Availability is checked up front, as for completion: a file the compiler
  * cannot serve gets no request, and a notification, shown once per project,
@@ -38,6 +44,7 @@ import java.util.concurrent.Future;
 public final class HaxeCompilerNavigationService {
 
   private final Project project;
+  private final HaxeDefinitionCache definitions = new HaxeDefinitionCache();
 
   public static HaxeCompilerNavigationService getInstance(@NotNull Project project) {
     return project.getService(HaxeCompilerNavigationService.class);
@@ -67,43 +74,74 @@ public final class HaxeCompilerNavigationService {
       () -> HaxeCompilerSettings.getInstance(project).setCompilerIdeFeaturesEnabled(false));
   }
 
-  /** Every reference of the symbol at the offset, declaration excluded; empty when the server gives none. Background thread. */
+  /**
+   * Every reference of the symbol at the offset, declaration excluded; empty
+   * when the server gives none or no server answered. Background thread.
+   */
   @NotNull
   public List<Location> references(@NotNull VirtualFile file, int offset, @NotNull FindReferencesKind kind) {
-    return request(file, offset, DisplayMethods.FIND_REFERENCES,
-                   (connected, path, payload) -> connected.client().references(connected.args(), path, payload.serverOffset(), payload.contents(), kind));
+    FileRequest<List<Location>> findReferences = (connected, path, payload) ->
+      connected.client().references(connected.args(), path, payload.serverOffset(), payload.contents(), kind);
+    List<Location> locations = request(file, offset, DisplayMethods.FIND_REFERENCES, findReferences);
+    return locations == null ? List.of() : locations;
   }
 
-  /** The declarations of the symbol at the offset; empty when the server gives none. Background thread. */
-  @NotNull
+  /** The declarations of the symbol at the offset, empty when the server gives none; null when no server answered. Background thread. */
+  @Nullable
   public List<Location> definition(@NotNull VirtualFile file, int offset) {
-    return request(file, offset, DisplayMethods.GOTO_DEFINITION,
-                   (connected, path, payload) -> connected.client().definition(connected.args(), path, payload.serverOffset(), payload.contents()));
+    FileRequest<List<Location>> findDefinition = (connected, path, payload) ->
+      connected.client().definition(connected.args(), path, payload.serverOffset(), payload.contents());
+    return request(file, offset, DisplayMethods.GOTO_DEFINITION, findDefinition);
   }
 
   /**
    * {@link #definition} for a caller that holds the read lock and so must
-   * not block on the network: the request runs on a pooled thread while the
-   * caller waits cancelably for at most
+   * not block on the network. An answer kept from an earlier request at the
+   * same position and state serves directly; otherwise the request runs on
+   * a pooled thread while the caller waits cancelably for at most
    * {@link HaxeCancelableFutures#ANSWER_TIMEOUT_MS}. Empty when the server
-   * gives none or the wait runs out.
+   * places nothing; null when no answer came: the file has no display
+   * context, no server runs, the compiler rejected the request or the wait
+   * ran out.
    */
-  @NotNull
+  @Nullable
   public List<Location> definitionUnderReadLock(@NotNull VirtualFile file, int offset) {
+    DisplayContext context = HaxeCompilerDisplayService.getInstance(project).contextFor(file);
+    if (context == null) return null;
+    HaxeDefinitionCache.Key key = new HaxeDefinitionCache.Key(HaxeCompilerDisplayService.contextKey(context), file.getPath(), offset);
+    HaxeDefinitionCache.Stamps stamps = stampsOf(file);
+    List<Location> cached = definitions.get(key, stamps);
+    if (cached != null) return cached;
+
     Future<List<Location>> request = ApplicationManager.getApplication().executeOnPooledThread(() -> definition(file, offset));
     String label = "display/definition for " + file.getPath();
     List<Location> answer = HaxeCancelableFutures.awaitUnderReadLock(request, HaxeCancelableFutures.ANSWER_TIMEOUT_MS, label);
-    return answer == null ? List.of() : answer;
+    // a wait that ran out, or a server that did not answer, says nothing worth keeping
+    if (answer == null) return null;
+    definitions.put(key, stamps, answer);
+    return answer;
   }
 
+  public void clearCaches() {
+    definitions.clear();
+  }
+
+  /** The file's document stamp (its saved stamp without a document) and the project's PSI count. Call in a read action. */
   @NotNull
+  private HaxeDefinitionCache.Stamps stampsOf(@NotNull VirtualFile file) {
+    Document document = FileDocumentManager.getInstance().getCachedDocument(file);
+    long documentStamp = document != null ? document.getModificationStamp() : file.getModificationStamp();
+    return new HaxeDefinitionCache.Stamps(documentStamp, PsiModificationTracker.getInstance(project).getModificationCount());
+  }
+
+  /** Null when the file has no display context, no server runs, or the request failed (logged). */
+  @Nullable
   private List<Location> request(@NotNull VirtualFile file, int offset, @NotNull String method, @NotNull FileRequest<List<Location>> request) {
     HaxeCompilerDisplayService displayService = HaxeCompilerDisplayService.getInstance(project);
     DisplayContext context = HaxeReadActions.compute(() -> displayService.contextFor(file));
-    if (context == null) return List.of();
+    if (context == null) return null;
     FilePayload payload = HaxeReadActions.compute(() -> HaxeCompilerDisplayService.payloadOf(file, offset));
-    List<Location> locations = displayService.send(context, method, file.getPath(), payload, request);
-    return locations == null ? List.of() : locations;
+    return displayService.send(context, method, file.getPath(), payload, request);
   }
 
 }
